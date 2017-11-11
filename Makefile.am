@@ -1,6 +1,6 @@
 # make static library target
 bin_PROGRAMS = mothership_gui
-mothership_gui_SOURCES = src/main.c 
+mothership_gui_SOURCES = src/main.c src/EdsacErrorNotebook.c include/EdsacErrorNotebook.h
 mothership_gui_LDADD = $(GLIB_LIBS) $(GTK_LIBS) $(LIBEDSACNETWORKING_LIBS)
 
 # make subdirectories work
