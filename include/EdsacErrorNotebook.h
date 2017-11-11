@@ -17,6 +17,22 @@ extern "C" {
 #include <glib.h>
 #include <gtk/gtk.h>
 
+// type of link or tab
+typedef enum {
+    RACK,
+    CHASSIS,
+    VALVE,
+    ALL
+} ClickableType;
+
+// information about a link
+typedef struct {
+    ClickableType type;
+    unsigned int rack_num;
+    unsigned int chassis_num;
+    unsigned int valve_num;
+} Clickable;
+
 // GObject init
 G_BEGIN_DECLS
 
@@ -30,6 +46,9 @@ G_BEGIN_DECLS
 
 // forward declaration
 struct _EdsacErrorNotebookPrivate;
+struct _LinkyTextBuffer;
+
+typedef struct _LinkyTextBuffer *notebook_page_id_t;
 
 // Object
 typedef struct {
@@ -43,8 +62,8 @@ typedef struct {
 } EdsacErrorNotebookClass;
 
 // public methods
-void edsac_error_notebook_say_hi(EdsacErrorNotebook *self);
 EdsacErrorNotebook *edsac_error_notebook_new(void);
+notebook_page_id_t add_new_page_to_notebook(EdsacErrorNotebook *self, Clickable *data);
 
 // boilerplate public methods
 EdsacErrorNotebook *edsac_error_notebook_construct(GType object_type);
