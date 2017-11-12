@@ -4,5 +4,6 @@
         "error",
         "new",
         "notebook"
-    ]
+    ],
+    "C_Cpp.intelliSenseEngine": "Default"
 }

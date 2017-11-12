@@ -30,7 +30,7 @@ typedef struct {
     ClickableType type;
     unsigned int rack_num;
     unsigned int chassis_num;
-    unsigned int valve_num;
+    int valve_num; // negative signifies that this is unspecified
 } Clickable;
 
 // GObject init
