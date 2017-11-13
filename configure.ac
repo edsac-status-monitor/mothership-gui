@@ -37,6 +37,7 @@ PKG_PREREQ([0.29])
 PKG_CHECK_MODULES([GLIB], [glib-2.0 >= 2.32])
 PKG_CHECK_MODULES([LIBEDSACNETWORKING], [libedsacnetworking >= 1.0.0])
 PKG_CHECK_MODULES([GTK], [gtk+-3.0 >= 3.22.11])
+PKG_CHECK_MODULES([SQLITE], [sqlite3 >= 3.8.7])
 
 # use libtool
 LT_PREREQ([2.4.6])
