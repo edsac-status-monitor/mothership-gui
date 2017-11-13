@@ -11,17 +11,17 @@
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <edsac_representation.h>
+#include <glib.h>
+#include <string.h>
+#include <time.h>
 
 // functions
 
 int main(void) {
-    const unsigned int test_num = 1876142908;
+    const unsigned int test_num = 248;
     const char* correct_mac = "ff:ff:ff:ff:ff:ff";
     init_database();
-
-    // add and remove a valid node
-    assert(true == add_node(test_num, test_num, correct_mac, true, "myconfig"));
-    assert(true == remove_node(test_num, test_num));
 
     // invalid mac address
     assert(false == add_node(test_num, test_num, "not a mac address", false, "myconfig"));
@@ -37,5 +37,33 @@ int main(void) {
     assert(true == add_node(test_num, test_num, correct_mac, false, "\" lala sqlite will error. I could drop all your tables!!!"));
     assert(true == remove_node(test_num, test_num));
 
+    // add a valid node to use with the errors
+    assert(true == add_node(test_num, test_num, correct_mac, true, "myconfig"));
+
+    // add an error
+    BufferItem item;
+
+    // IP address
+    GString *address_string = g_string_new(NULL);
+    g_string_sprintf(address_string, "127.0.%i.%i", test_num, test_num);
+
+    struct sockaddr *address = alloc_addr(address_string->str, 1234);
+    memcpy(&item.address, address->sa_data +2, sizeof(item.address));
+
+    free(address);
+    g_string_free(address_string, TRUE);
+
+    // Message
+    hardware_error_valve(&item.msg, 22, "test");
+
+    // recv_time
+    item.recv_time = time(NULL);
+
+    // create an error from this BufferItem
+    assert(true == add_error(&item));
+
+    // clean up
+    assert(true == remove_all_errors());
+    assert(true == remove_node(test_num, test_num));
     close_database();
 }

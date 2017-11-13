@@ -13,6 +13,6 @@ AM_CFLAGS = -Wall -Wextra -pedantic -Wshadow -Wpointer-arith -Wcast-align -Wwrit
 # Unit tests
 check_PROGRAMS = sql.test
 sql_test_SOURCES = src/test/sql-test.c src/sql.c src/sql.h
-sql_test_LDADD = $(PTHREAD_LIBS) $(SQLITE_LIBS) $(GLIB_LIBS)
+sql_test_LDADD = $(PTHREAD_LIBS) $(SQLITE_LIBS) $(GLIB_LIBS) $(LIBEDSACNETWORKING_LIBS)
 TESTS = sql.test
 

@@ -15,6 +15,8 @@ extern "C" {
 
 // includes
 #include <stdbool.h>
+#include <edsac_server.h> // libedsacnetworking
+#include "EdsacErrorNotebook.h"
 
 // declarations
 void init_database(void);
@@ -22,6 +24,9 @@ void close_database(void);
 
 bool add_node(const unsigned int rack_no, const unsigned int chassis_no, const char* mac_address, const bool enabled, const char* config_path);
 bool remove_node(const unsigned int rack_no, const unsigned int chassis_no);
+
+bool add_error(const BufferItem *error);
+bool remove_all_errors(void);
 
 #ifdef _cplusplus
 }
