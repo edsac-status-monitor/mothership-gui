@@ -441,6 +441,21 @@ static void close_button_handler(GtkWidget *button, __attribute__((unused)) GdkE
         gtk_notebook_remove_page(GTK_NOTEBOOK(notebook), page_num);
 
         assert(0 == pthread_mutex_unlock(&notebook->priv->mutex));
+
+        // close the window if the last page is closed
+        if (0 == gtk_notebook_get_n_pages(GTK_NOTEBOOK(notebook))) {
+            GtkWidget *toplevel = gtk_widget_get_toplevel(GTK_WIDGET(notebook));
+            if (gtk_widget_is_toplevel(toplevel)) { // docs recommend this extra check https://developer.gnome.org/gtk3/stable/GtkWidget.html#gtk-widget-get-toplevel
+                GtkWindow *window = GTK_WINDOW(toplevel);
+                assert(NULL != window);
+
+                gtk_window_close(window);
+            } else {
+                perror("Could not find the top level widget");
+                exit(EXIT_FAILURE);
+            }
+        }
+
     } 
 }
 
