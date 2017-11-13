@@ -78,6 +78,46 @@ void close_database(void) {
     assert(SQLITE_OK == sqlite3_close(db));
 }
 
+static int find_node_callback(void *ret, int argc, char** argv, __attribute__((unused)) char **col_name) {
+    if ((NULL == ret) || (NULL == argv)) {
+        return 1;
+    } else if (NULL == *argv) {
+        return 1;
+    } else if (1 != argc) {
+        return 1;
+    }
+
+    // assume we get a valid number from sqlite
+    int * ret_int = (int *) ret;
+    *ret_int = atoi(argv[0]);
+
+    return 0;
+}
+
+// attempts to find the node id we were asked for
+// if it is not found then -1 is returned
+static int find_node(const unsigned int rack_no, const unsigned int chassis_no) {
+    GString *query = g_string_new(NULL);
+    assert(NULL != query);
+
+    printf("find node rack %x chassis %x\n", rack_no, chassis_no);
+
+    g_string_printf(query,
+        "SELECT id FROM nodes WHERE rack_no=%i AND chassis_no=%i;", rack_no, chassis_no);
+
+    assert(0 == pthread_mutex_lock(&db_mutex));
+
+    int ret = -1;
+    if (SQLITE_OK != sqlite3_exec(db, query->str, find_node_callback, &ret, NULL)) {
+        ret = -1;
+    }
+
+    assert(0 == pthread_mutex_unlock(&db_mutex));
+    g_string_free(query, TRUE);
+
+    return ret;
+}
+
 bool add_node(const unsigned int rack_no, const unsigned int chassis_no, const char* mac_address, const bool enabled, const char* config_path) {
     if (!check_mac_address(mac_address)) {
         return false;
@@ -119,22 +159,37 @@ bool add_node(const unsigned int rack_no, const unsigned int chassis_no, const c
 }
 
 bool remove_node(const unsigned int rack_no, const unsigned int chassis_no) {
-    GString *query = g_string_new(NULL);
-    assert(NULL != query);
+    const int node_id = find_node(rack_no, chassis_no);
+    if (-1 == node_id) {
+        return false;
+    }
 
-    g_string_printf(query,
-        "DELETE FROM nodes WHERE rack_no = %i AND chassis_no = %i;", 
-        rack_no, chassis_no);
+    GString *query1 = g_string_new(NULL);
+    assert(NULL != query1);
+    GString *query2 = g_string_new(NULL);
+    assert(NULL != query2);
+
+
+    // delete all of the errors associated with this node
+    g_string_printf(query1,
+        "DELETE FROM errors WHERE node_id = %i;", node_id);
+    
+    // delete the node
+    g_string_printf(query2,
+        "DELETE FROM nodes WHERE id = %i;", node_id);
 
     assert(0 == pthread_mutex_lock(&db_mutex));
 
     bool ret = true;
-    if (SQLITE_OK != sqlite3_exec(db, query->str, NULL, NULL, NULL)) {
+    if (SQLITE_OK != sqlite3_exec(db, query1->str, NULL, NULL, NULL)) {
+        ret = false;
+    } else if (SQLITE_OK != sqlite3_exec(db, query2->str, NULL, NULL, NULL)) {
         ret = false;
     }
 
     assert(0 == pthread_mutex_unlock(&db_mutex));
-    g_string_free(query, TRUE);
+    g_string_free(query1, TRUE);
+    g_string_free(query2, TRUE);
 
     return ret;
 }
@@ -150,46 +205,6 @@ bool remove_all_errors(void) {
     }
 
     assert(0 == pthread_mutex_unlock(&db_mutex));
-
-    return ret;
-}
-
-static int find_node_callback(void *ret, int argc, char** argv, __attribute__((unused)) char **col_name) {
-    if ((NULL == ret) || (NULL == argv)) {
-        return 1;
-    } else if (NULL == *argv) {
-        return 1;
-    } else if (1 != argc) {
-        return 1;
-    }
-
-    // assume we get a valid number from sqlite
-    int * ret_int = (int *) ret;
-    *ret_int = atoi(argv[0]);
-
-    return 0;
-}
-
-// attempts to find the node id we were asked for
-// if it is not found then -1 is returned
-static int find_node(const unsigned int rack_no, const unsigned int chassis_no) {
-    GString *query = g_string_new(NULL);
-    assert(NULL != query);
-
-    printf("find node rack %x chassis %x\n", rack_no, chassis_no);
-
-    g_string_printf(query,
-        "SELECT id FROM nodes WHERE rack_no=%i AND chassis_no=%i;", rack_no, chassis_no);
-
-    assert(0 == pthread_mutex_lock(&db_mutex));
-
-    int ret = -1;
-    if (SQLITE_OK != sqlite3_exec(db, query->str, find_node_callback, &ret, NULL)) {
-        ret = -1;
-    }
-
-    assert(0 == pthread_mutex_unlock(&db_mutex));
-    g_string_free(query, TRUE);
 
     return ret;
 }
