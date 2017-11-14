@@ -73,7 +73,8 @@ int main(void) {
     SearchResult *res = results->data;
     assert(NULL != res);
     assert(NULL != res->message);
-    assert(0 == strcmp("Hardware Error: test", res->message));
+    puts(res->message);
+    assert(0 > strcmp("Hardware Error: test", res->message));
     assert(test_num == res->rack_no);
     assert(test_num == res->chassis_no);
     assert(22 != res->rack_no);

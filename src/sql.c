@@ -253,12 +253,23 @@ bool add_error(const BufferItem *error) {
     const uint32_t chassis_num = ntohl(chassis_num_n);
 
     bool ret = false;
-    GString *error_msg = g_string_new(NULL);
+
+    struct tm *time = localtime(&error->recv_time);
+    assert(NULL != time);
+    char *time_str = asctime(time);
+    time = NULL;
+    g_free(time);
+    assert(NULL != time_str);
+
+    GString *error_msg = g_string_new(time_str);
     assert(NULL != error_msg);
+
+    // remove the year and newline from the time string
+    g_string_truncate(error_msg, error_msg->len - 5);
 
     switch (error->msg.type) {
         case HARD_ERROR_VALVE:
-            g_string_sprintf(error_msg, "Hardware Error: %s", 
+            g_string_append_printf(error_msg, "Hardware Error: %s", 
                 error->msg.data.hardware_valve.message->str);
 
             ret = add_error_decoded(rack_num, chassis_num, 
@@ -267,7 +278,7 @@ bool add_error(const BufferItem *error) {
             break;
 
         case HARD_ERROR_OTHER:
-            g_string_sprintf(error_msg, "Hardware Error: %s",
+            g_string_append_printf(error_msg, "Hardware Error: %s",
                 error->msg.data.hardware_other.message->str);
 
             ret = add_error_decoded(rack_num, chassis_num, -1, 
@@ -275,7 +286,7 @@ bool add_error(const BufferItem *error) {
             break;
 
         case SOFT_ERROR:
-            g_string_sprintf(error_msg, "Software Error: %s",
+            g_string_append_printf(error_msg, "Software Error: %s",
                 error->msg.data.software.message->str);
 
             ret = add_error_decoded(rack_num, chassis_num, -1,
@@ -283,7 +294,7 @@ bool add_error(const BufferItem *error) {
             break;
 
         default:
-            g_string_sprintf(error_msg, "Unknown Error Type: %i",
+            g_string_append_printf(error_msg, "Unknown Error Type: %i",
                 error->msg.type);
             break;
     }
