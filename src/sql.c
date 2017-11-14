@@ -58,8 +58,10 @@ static GString *fix_string(const char* str) {
 
     for (gsize i = 0; i < ret->len; i++) {
         if ('"' == ret->str[i]) {
+            #pragma GCC diagnostic push
             #pragma GCC diagnostic ignored "-Wsign-conversion"
             ret = g_string_insert_c(ret, i, '"');
+            #pragma GCC diagnostic pop
             assert(NULL != ret);
             i += 1; // don't loop forever
         }
@@ -99,8 +101,6 @@ static int find_node_callback(void *ret, int argc, char** argv, __attribute__((u
 static int find_node(const unsigned int rack_no, const unsigned int chassis_no) {
     GString *query = g_string_new(NULL);
     assert(NULL != query);
-
-    printf("find node rack %x chassis %x\n", rack_no, chassis_no);
 
     g_string_printf(query,
         "SELECT id FROM nodes WHERE rack_no=%i AND chassis_no=%i;", rack_no, chassis_no);
@@ -245,7 +245,6 @@ bool add_error(const BufferItem *error) {
 
     // "Network" is big endian. We don't know what the host is
     uint32_t addr = htonl(error->address.s_addr);
-    printf("%x\n", addr);
     const uint32_t rack_num_n = (addr & 0x0000FF00) << 16;
     const uint32_t chassis_num_n = (addr & 0x000000FF) << 24;
 
@@ -293,3 +292,95 @@ bool add_error(const BufferItem *error) {
     return ret;
 }
 
+void free_search_result(gpointer res) {
+    if (NULL == res) {
+        return;
+    }
+
+    SearchResult *result = (SearchResult *) res;
+    
+    g_free(result->message);
+    g_free(result);
+}
+
+GList *search_clickable(const Clickable *search) {
+    if (NULL == search) {
+        return NULL;
+    }
+
+    // construct query
+    GString *query = g_string_new("SELECT errors.description, nodes.rack_no, nodes.chassis_no, errors.valve_no \
+                    FROM errors \
+                    INNER JOIN nodes \
+                    ON errors.node_id = nodes.id \
+                    WHERE nodes.enabled = 1 AND errors.enabled = 1 "); 
+    assert(NULL != query);
+
+    switch(search->type) {
+        case ALL:
+            break;
+        case RACK:
+            g_string_append_printf(query, "AND nodes.rack_no = %i", search->rack_num); 
+            break;
+        case CHASSIS:
+            g_string_append_printf(query, "AND nodes.rack_no = %i AND nodes.chassis_no = %i", search->rack_num, search->chassis_num);
+            break;
+        case VALVE:
+            g_string_append_printf(query, "AND nodes.rack_no = %i AND nodes.chassis_no = %i AND errors.valve_no = %i", search->rack_num, search->chassis_num, search->valve_num);
+            break;
+        default:
+            g_string_free(query, TRUE);
+            g_print("I don't know how to search for that!\n");
+            return NULL;
+    }
+    g_string_append(query, " ORDER BY errors.recv_time;");
+
+    assert(0 == pthread_mutex_lock(&db_mutex));
+
+    GList *results = NULL; // empty list
+
+    sqlite3_stmt *statement = NULL;
+    if (SQLITE_OK != sqlite3_prepare_v2(db, query->str, -1, &statement, NULL)) {
+        assert(0 == pthread_mutex_unlock(&db_mutex));
+        g_string_free(query, TRUE);
+        return NULL;
+    }
+    g_string_free(query, TRUE);
+
+    int status = SQLITE_ERROR;
+    do {
+        status = sqlite3_step(statement);
+        if (SQLITE_DONE == status) {
+            break;
+        } else if (SQLITE_ROW != status) {
+            assert(0 == pthread_mutex_unlock(&db_mutex));
+            assert(SQLITE_OK == sqlite3_finalize(statement));
+            puts("Bad sqlite3_step");
+            g_list_free_full(results, free_search_result);
+            return NULL;
+        }
+        // status == SQL_ROW so get the data
+        SearchResult *res = malloc(sizeof(SearchResult));
+        assert(NULL != res);
+
+        #pragma GCC diagnostic push
+        #pragma GCC diagnostic ignored "-Wpointer-sign"
+        res->message = strdup(sqlite3_column_text(statement, 0));
+        #pragma GCC diagnostic pop
+        assert(NULL != res->message);
+
+        #pragma GCC diagnostic push
+        #pragma GCC diagnostic ignored "-Wsign-conversion"
+        res->rack_no = sqlite3_column_int(statement, 1);
+        res->chassis_no = sqlite3_column_int(statement, 2);
+        #pragma GCC diagnostic pop
+        res->valve_no = sqlite3_column_int(statement, 3);
+
+        results = g_list_append(results, res);
+    } while (true);
+
+    assert(0 == pthread_mutex_unlock(&db_mutex));
+    assert(SQLITE_OK == sqlite3_finalize(statement));
+
+    return results;
+}    

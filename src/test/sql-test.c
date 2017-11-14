@@ -62,8 +62,32 @@ int main(void) {
     // create an error from this BufferItem
     assert(true == add_error(&item));
 
+    // search for this error
+    Clickable search;
+    search.type = RACK;
+    search.rack_num = test_num;
+    GList *results = search_clickable(&search);
+    assert(NULL != results);
+    
+    // the result is what we just added
+    SearchResult *res = results->data;
+    assert(NULL != res);
+    assert(NULL != res->message);
+    assert(0 == strcmp("Hardware Error: test", res->message));
+    assert(test_num == res->rack_no);
+    assert(test_num == res->chassis_no);
+    assert(22 != res->rack_no);
+
+    // only result
+    assert(NULL == results->next);
+    assert(NULL == results->prev);
+
     // clean up
     assert(true == remove_all_errors());
+
+    // test that we can't find the error we just removed
+    assert(NULL == search_clickable(&search));
+
     assert(true == remove_node(test_num, test_num));
     close_database();
 }
