@@ -20,7 +20,6 @@
 
 #define DEFAULT_DB_PATH "./mothership.db"
 
-static pthread_mutex_t db_mutex;
 static sqlite3 *db = NULL;
 
 // functions
@@ -72,58 +71,20 @@ static GString *fix_string(const char* str) {
 
 void init_database(void) {
     assert(SQLITE_OK == sqlite3_open(DEFAULT_DB_PATH, &db));
-    assert(0 == pthread_mutex_init(&db_mutex, NULL));
 }
 
 void close_database(void) {
-    assert(0 == pthread_mutex_destroy(&db_mutex));
     assert(SQLITE_OK == sqlite3_close(db));
-}
-
-static int find_node_callback(void *ret, int argc, char** argv, __attribute__((unused)) char **col_name) {
-    if ((NULL == ret) || (NULL == argv)) {
-        return 1;
-    } else if (NULL == *argv) {
-        return 1;
-    } else if (1 != argc) {
-        return 1;
-    }
-
-    // assume we get a valid number from sqlite
-    int * ret_int = (int *) ret;
-    *ret_int = atoi(argv[0]);
-
-    return 0;
-}
-
-// attempts to find the node id we were asked for
-// if it is not found then -1 is returned
-static int find_node(const unsigned int rack_no, const unsigned int chassis_no) {
-    GString *query = g_string_new(NULL);
-    assert(NULL != query);
-
-    g_string_printf(query,
-        "SELECT id FROM nodes WHERE rack_no=%i AND chassis_no=%i;", rack_no, chassis_no);
-
-    assert(0 == pthread_mutex_lock(&db_mutex));
-
-    int ret = -1;
-    if (SQLITE_OK != sqlite3_exec(db, query->str, find_node_callback, &ret, NULL)) {
-        ret = -1;
-    }
-
-    assert(0 == pthread_mutex_unlock(&db_mutex));
-    g_string_free(query, TRUE);
-
-    return ret;
 }
 
 bool add_node(const unsigned int rack_no, const unsigned int chassis_no, const char* mac_address, const bool enabled, const char* config_path) {
     if (!check_mac_address(mac_address)) {
+        puts("mac");
         return false;
     }
 
     if (NULL == config_path) {
+        puts("config");
         return false;
     }
 
@@ -143,15 +104,13 @@ bool add_node(const unsigned int rack_no, const unsigned int chassis_no, const c
         "INSERT into nodes(rack_no, chassis_no, mac_address, enabled, config) VALUES(%i, %i, \"%s\", %i, \"%s\");", 
         rack_no, chassis_no, mac_address, enabled_int, config_string->str);
 
-    assert(0 == pthread_mutex_lock(&db_mutex));
-
     bool ret = true;
     char *errstr = NULL;
     if (SQLITE_OK != sqlite3_exec(db, query->str, NULL, NULL, &errstr)) {
+        puts(errstr);
         ret = false;
     }
 
-    assert(0 == pthread_mutex_unlock(&db_mutex));
     g_string_free(query, TRUE);
     g_string_free(config_string, TRUE);
 
@@ -159,37 +118,31 @@ bool add_node(const unsigned int rack_no, const unsigned int chassis_no, const c
 }
 
 bool remove_node(const unsigned int rack_no, const unsigned int chassis_no) {
-    const int node_id = find_node(rack_no, chassis_no);
-    if (-1 == node_id) {
-        return false;
-    }
-
-    GString *query1 = g_string_new(NULL);
-    assert(NULL != query1);
-    GString *query2 = g_string_new(NULL);
-    assert(NULL != query2);
-
+    // begin transaction
+    GString *query = g_string_new("begin transaction;");
+    assert(NULL != query);
 
     // delete all of the errors associated with this node
-    g_string_printf(query1,
-        "DELETE FROM errors WHERE node_id = %i;", node_id);
+    g_string_append_printf(query,
+        "DELETE FROM errors WHERE node_id IN \
+            (SELECT DISTINCT id FROM nodes \
+                WHERE rack_no = %i AND chassis_no = %i);", rack_no, chassis_no);
     
     // delete the node
-    g_string_printf(query2,
-        "DELETE FROM nodes WHERE id = %i;", node_id);
+    g_string_append_printf(query,
+        "DELETE FROM nodes WHERE rack_no = %i AND chassis_no = %i;", rack_no, chassis_no);
 
-    assert(0 == pthread_mutex_lock(&db_mutex));
+    // commit transaction to the database
+    g_string_append(query, "commit;");
 
     bool ret = true;
-    if (SQLITE_OK != sqlite3_exec(db, query1->str, NULL, NULL, NULL)) {
-        ret = false;
-    } else if (SQLITE_OK != sqlite3_exec(db, query2->str, NULL, NULL, NULL)) {
+    char *errstr = NULL;
+    if (SQLITE_OK != sqlite3_exec(db, query->str, NULL, NULL, &errstr)) {
+        puts(errstr);
         ret = false;
     }
 
-    assert(0 == pthread_mutex_unlock(&db_mutex));
-    g_string_free(query1, TRUE);
-    g_string_free(query2, TRUE);
+    g_string_free(query, TRUE);
 
     return ret;
 }
@@ -197,14 +150,10 @@ bool remove_node(const unsigned int rack_no, const unsigned int chassis_no) {
 bool remove_all_errors(void) {
     const char *query = "DELETE FROM errors;";
 
-    assert(0 == pthread_mutex_lock(&db_mutex));
-
     bool ret = true;
     if (SQLITE_OK != sqlite3_exec(db, query, NULL, NULL, NULL)) {
         ret = false;
     }
-
-    assert(0 == pthread_mutex_unlock(&db_mutex));
 
     return ret;
 }
@@ -215,22 +164,19 @@ static bool add_error_decoded(const uint32_t rack_no, const uint32_t chassis_no,
 
     GString *msg_str = fix_string(msg);
 
-    const int node_id = find_node(rack_no, chassis_no);
-    if (-1 == node_id) {
-        return false;
-    }
-
     g_string_printf(query,
-        "INSERT INTO errors(node_id, recv_time, description, enabled, valve_no) VALUES(%i, %li, \"%s\", 1, %i);", node_id, recv_time, msg_str->str, valve_no);
-
-    assert(0 == pthread_mutex_lock(&db_mutex));
+        "INSERT INTO errors(node_id, recv_time, description, enabled, valve_no) \
+            SELECT nodes.id, %li, \"%s\", 1, %i \
+                FROM nodes \
+                WHERE nodes.rack_no = %i AND nodes.chassis_no = %i;", \
+        recv_time, msg_str->str, valve_no, rack_no, chassis_no);
 
     bool ret = true;
-    if (SQLITE_OK != sqlite3_exec(db, query->str, NULL, NULL, NULL)) {
+    char *errmsg = NULL;
+    if (SQLITE_OK != sqlite3_exec(db, query->str, NULL, NULL, &errmsg)) {
+        puts(errmsg);
         ret = false;
     }
-
-    assert(0 == pthread_mutex_unlock(&db_mutex));
 
     g_string_free(query, TRUE);
     g_string_free(msg_str, TRUE);
@@ -346,13 +292,10 @@ GList *search_clickable(const Clickable *search) {
     }
     g_string_append(query, " ORDER BY errors.recv_time;");
 
-    assert(0 == pthread_mutex_lock(&db_mutex));
-
     GList *results = NULL; // empty list
 
     sqlite3_stmt *statement = NULL;
     if (SQLITE_OK != sqlite3_prepare_v2(db, query->str, -1, &statement, NULL)) {
-        assert(0 == pthread_mutex_unlock(&db_mutex));
         g_string_free(query, TRUE);
         return NULL;
     }
@@ -364,7 +307,6 @@ GList *search_clickable(const Clickable *search) {
         if (SQLITE_DONE == status) {
             break;
         } else if (SQLITE_ROW != status) {
-            assert(0 == pthread_mutex_unlock(&db_mutex));
             assert(SQLITE_OK == sqlite3_finalize(statement));
             puts("Bad sqlite3_step");
             g_list_free_full(results, free_search_result);
@@ -390,7 +332,6 @@ GList *search_clickable(const Clickable *search) {
         results = g_list_append(results, res);
     } while (true);
 
-    assert(0 == pthread_mutex_unlock(&db_mutex));
     assert(SQLITE_OK == sqlite3_finalize(statement));
 
     return results;

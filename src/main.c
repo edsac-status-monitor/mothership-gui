@@ -50,9 +50,7 @@ static void shutdown_handler(__attribute__((unused)) GApplication *app, gpointer
 
 // called periodically in its own thread to 
 static void periodic_update(__attribute__((unused)) void *unused) {
-    puts("pong");
     g_idle_add((GSourceFunc) edsac_error_notebook_update, (gpointer) notebook);
-    //edsac_error_notebook_update(notebook);
 }
 
 int main(int argc, char** argv) {

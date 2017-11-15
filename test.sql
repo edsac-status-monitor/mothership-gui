@@ -32,9 +32,13 @@ INSERT into errors(node_id, recv_time, description)
 	VALUES(1, 90, "Tue Nov 14 19:35:50 Hardware Error: node about to explode");
 INSERT into errors(node_id, recv_time, description, enabled)
 	VALUES(2, 10, "Tue Nov 14 19:34:30 Software Error: blah blah blah", 1);
-INSERT into errors(node_id, recv_time, description, enabled, valve_no)
-	VALUES(2, 80, "Tue Nov 14 19:35:40 Hardware Error: valve causing a chain reaction", 1, 2);
+/*INSERT into errors(node_id, recv_time, description, enabled, valve_no)
+	VALUES(2, 80, "Tue Nov 14 19:35:40 Hardware Error: valve causing a chain reaction", 1, 2);*/
 
+INSERT INTO errors(node_id, recv_time, description, enabled, valve_no)
+	SELECT nodes.id, 80, "Tue Nov 14 19:35:40 Hardware Error: valve causing a chain reaction", 1, 2
+		FROM nodes
+		WHERE nodes.rack_no = 1 AND nodes.chassis_no = 2;
 
 /* hmm I wonder what happened here... */
 .print "\n--Error Traceback:"
