@@ -15,6 +15,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
+#include "sql.h"
 
 // declarations
 
@@ -48,6 +49,7 @@ static void append_linky_text_buffer(LinkyBuffer *linky_buffer, const unsigned i
 static void free_g_string(gpointer g_string);
 static void free_linky_buffer(LinkyBuffer *linky_buffer);
 static void add_link(size_t start_pos, size_t end_pos, GtkTextBuffer *buffer, Clickable* data);
+static void update_tab(gpointer data, gpointer unused);
 
 // GTK
 static GtkWidget *new_text_view(void);
@@ -60,6 +62,15 @@ static void close_button_handler(GtkWidget *button, GdkEvent *event, GtkWidget *
 static void clicked(const GtkTextTag *tag, const GtkTextView *parent, const GdkEvent *event, const GtkTextIter *iter, Clickable *data);
 
 /**** Public Methods ****/
+// update data to be in line with the database
+void update(EdsacErrorNotebook *self) {
+    assert(0 == pthread_mutex_lock(&self->priv->mutex));
+
+    g_slist_foreach(self->priv->open_tabs_list, update_tab, NULL);
+
+    assert(0 == pthread_mutex_unlock(&self->priv->mutex));
+}
+
 // add a new page to the notebook
 notebook_page_id_t add_new_page_to_notebook(EdsacErrorNotebook *self, Clickable *data) {
     if ((NULL == self) || (NULL == data)) {
@@ -120,6 +131,9 @@ notebook_page_id_t add_new_page_to_notebook(EdsacErrorNotebook *self, Clickable 
     assert(0 == pthread_mutex_lock(&self->priv->mutex));
     self->priv->open_tabs_list = g_slist_insert_sorted(self->priv->open_tabs_list, linky_buffer, open_tabs_list_compare_by_id);
     assert(0 == pthread_mutex_unlock(&self->priv->mutex));
+
+    // update the new page
+    update_tab((gpointer) linky_buffer, NULL);
 
     // show the new page
     GtkWidget *page = gtk_notebook_get_nth_page(notebook, index);
@@ -275,7 +289,7 @@ static void append_linky_text_buffer(LinkyBuffer *linky_buffer, const unsigned i
     }
     const gsize valve_end = offset + message->len - 2; // colon, space. (this is unused when valve_no < 0 so it remains valid)
     
-    g_string_append_printf(message, "ERROR: %s\n", msg);
+    g_string_append_printf(message, "%s\n", msg);
     
     gtk_text_buffer_insert(linky_buffer->buffer, &buffer_end, message->str, (gint) message->len);
 
@@ -355,6 +369,46 @@ static gint open_tabs_list_compare_by_desc(gconstpointer a, gconstpointer b) {
     assert(0 == pthread_mutex_unlock(&B->mutex));
 
     return ret;
+}
+
+static void insert_search_result(gpointer data, gpointer user_data) {
+    if ((NULL == data) || (NULL == user_data)) {
+        return;
+    }
+
+    puts("insert search result");
+
+    SearchResult *res = (SearchResult *) data;
+    LinkyBuffer *linky_buffer = (LinkyBuffer *) user_data;
+
+    append_linky_text_buffer(linky_buffer, res->rack_no, res->chassis_no, res->valve_no, res->message);
+}
+
+static void update_tab(gpointer data, __attribute__((unused)) gpointer unused) {
+    assert(NULL != data);
+    LinkyBuffer *linky_buffer = (LinkyBuffer *) data;
+    assert(0 == pthread_mutex_lock(&linky_buffer->mutex));
+
+    puts("update_tab");
+
+    // query the database
+    GList *results = search_clickable(linky_buffer->description);
+
+    // clear stuff already in the buffer
+    GtkTextIter start;
+    gtk_text_buffer_get_start_iter(linky_buffer->buffer, &start);
+    GtkTextIter end;
+    gtk_text_buffer_get_end_iter(linky_buffer->buffer, &end);
+    
+    gtk_text_buffer_delete(linky_buffer->buffer, &start, &end);
+
+    // TODO
+    //g_slist_free_full(linky_buffer->g_string_list, free_g_string);
+    // TODO! I don't think we can free the clickables without upsetting other linky_buffers!
+
+    g_list_foreach(results, insert_search_result, (gpointer) linky_buffer);
+
+    assert(0 == pthread_mutex_unlock(&linky_buffer->mutex));
 }
 
 
@@ -533,7 +587,6 @@ EdsacErrorNotebook *edsac_error_notebook_construct(GType object_type) {
 
 // DESTROY PRIVATE MEMBER DATA HERE
 static void edsac_error_notebook_finalize(GObject *obj) {
-    g_print("deleting notebook\n");
     EdsacErrorNotebook *self = EDSAC_ERROR_NOTEBOOK(obj);
 
     assert(0 == pthread_mutex_destroy(&self->priv->mutex));
@@ -563,8 +616,8 @@ static void edsac_error_notebook_instance_init(EdsacErrorNotebook *self) {
     assert(NULL != all);
 
     // dummy data
-    append_linky_text_buffer(all, 1, 2, 3, "4");
-    append_linky_text_buffer(all, 1, 2, -1, "No valve");
+    //append_linky_text_buffer(all, 1, 2, 3, "4");
+    //append_linky_text_buffer(all, 1, 2, -1, "No valve");
 
     gtk_notebook_set_scrollable(&self->parent_instance, TRUE);
 }

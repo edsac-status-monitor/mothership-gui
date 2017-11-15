@@ -337,6 +337,7 @@ GList *search_clickable(const Clickable *search) {
             g_string_append_printf(query, "AND nodes.rack_no = %i AND nodes.chassis_no = %i", search->rack_num, search->chassis_num);
             break;
         case VALVE:
+            printf("valve_no = %i\n", search->valve_num);
             g_string_append_printf(query, "AND nodes.rack_no = %i AND nodes.chassis_no = %i AND errors.valve_no = %i", search->rack_num, search->chassis_num, search->valve_num);
             break;
         default:

@@ -11,9 +11,9 @@ CREATE TABLE nodes(
 
 /* insert some nodes */
 INSERT into nodes(rack_no, chassis_no, mac_address, enabled, config) 
-	VALUES(1, 1, "1:2:3:4", 1, "myconfig");
+	VALUES(1, 1, "01:02:03:04", 1, "myconfig");
 INSERT into nodes(rack_no, chassis_no, mac_address, enabled, config) 
-	VALUES(1, 2, "5:6:7:8", 1, "myconfig");
+	VALUES(1, 2, "05:06:07:08", 1, "myconfig");
 
 /* create errors table */
 CREATE TABLE errors(
@@ -31,7 +31,7 @@ INSERT into errors(node_id, recv_time, description)
 INSERT into errors(node_id, recv_time, description)
 	VALUES(1, 90, "Tue Nov 14 19:35:50 Hardware Error: node about to explode");
 INSERT into errors(node_id, recv_time, description, enabled)
-	VALUES(2, 10, "Tue Nov 14 19:34:30 Software Error: blah blah blah", 0);
+	VALUES(2, 10, "Tue Nov 14 19:34:30 Software Error: blah blah blah", 1);
 INSERT into errors(node_id, recv_time, description, enabled, valve_no)
 	VALUES(2, 80, "Tue Nov 14 19:35:40 Hardware Error: valve causing a chain reaction", 1, 2);
 
@@ -71,3 +71,12 @@ SELECT errors.description, nodes.rack_no, nodes.chassis_no, errors.valve_no
 	ON errors.node_id = nodes.id
 	WHERE nodes.enabled = 1 AND errors.enabled = 1 AND nodes.rack_no = 1
 	ORDER BY errors.recv_time;
+
+/* re-enable chassis number 2 */
+UPDATE nodes SET enabled = 1 WHERE rack_no = 1 AND chassis_no = 2;
+
+/* more dummy data */
+INSERT into nodes(rack_no, chassis_no, mac_address, enabled, config) 
+	VALUES(2, 2, "09:10:11:12", 1, "superconfig");
+INSERT into errors(node_id, recv_time, description)
+	VALUES(3, 101, "Tue Nov 14 19:36:01 Software Error: just chilling");
