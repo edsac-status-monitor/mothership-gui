@@ -22,11 +22,12 @@
 // context for an open tab
 typedef struct _LinkyTextBuffer {
     pthread_mutex_t mutex;  // controlls access to the structure
-    Clickable *description; // information about what this is a list of
+    Clickable description; // information about what this is a list of
     GtkTextBuffer *buffer;  // the text buffer
-    GSList *g_string_list;  // stuff to call g_string_free(., TRUE) on when we are deleted
+    GSList *g_string_list;  // stuff to call g_string_free(., TRUE) on when we clear buffer
     GSList *clickables;     // Clickables *within the text buffer* we need to free
     gint page_id;           // the gtknotebook page id
+    GString *title;         // The string for the tab's title
 } LinkyBuffer;
 
 // private object data
@@ -44,7 +45,7 @@ static bool clickable_compare(const Clickable *a, const Clickable *b);
 static gint open_tabs_list_compare_by_id(gconstpointer a, gconstpointer b);
 static gint open_tabs_list_compare_by_desc(gconstpointer a, gconstpointer b);
 static void open_tabs_list_dec_id(gpointer data, gpointer unused);
-static LinkyBuffer *new_linky_buffer(const char* text, Clickable *description);
+static LinkyBuffer *new_linky_buffer(Clickable *description);
 static void append_linky_text_buffer(LinkyBuffer *linky_buffer, const unsigned int rack_no, const unsigned int chassis_no, const int valve_no, const char* msg);
 static void free_g_string(gpointer g_string);
 static void free_linky_buffer(LinkyBuffer *linky_buffer);
@@ -79,58 +80,47 @@ notebook_page_id_t add_new_page_to_notebook(EdsacErrorNotebook *self, Clickable 
 
     GtkNotebook *notebook = &self->parent_instance;
 
-    // string to go into the new tab
-    GString *message = g_string_new(NULL);
-    assert(NULL != message);
+    // LinkyBuffer to describe the notebook
+    LinkyBuffer *linky_buffer = new_linky_buffer(data);
+    assert(NULL != linky_buffer);
+
+    // Heading for the new tab
+    linky_buffer->title = g_string_new(NULL);
+    assert(NULL != linky_buffer->title);
 
     switch(data->type) {
         case ALL:
+            g_string_printf(linky_buffer->title, "All");
             break;
         case RACK:
-            g_string_printf(message, "Rack %i", data->rack_num);
+            g_string_printf(linky_buffer->title, "Rack %i", data->rack_num);
             break;
         case CHASSIS:
-            g_string_printf(message, "Rack %i, Chassis: %i", data->rack_num, data->chassis_num);
+            g_string_printf(linky_buffer->title, "Rack %i, Chassis: %i", data->rack_num, data->chassis_num);
             break;
         case VALVE:
-            g_string_printf(message, "Rack %i, Chassis %i, Valve: %i", data->rack_num, data->chassis_num, data->valve_num);
+            g_string_printf(linky_buffer->title, "Rack %i, Chassis %i, Valve: %i", data->rack_num, data->chassis_num, data->valve_num);
             break;
         default:
-            g_string_printf(message, "(Unknown)");
+            g_string_printf(linky_buffer->title, "(Unknown)");
     }
 
     GtkWidget *msg = new_text_view(); 
     assert(NULL != msg);
 
-    // LinkyBuffer to describe the notebook
-    LinkyBuffer *linky_buffer = new_linky_buffer(message->str, data);
-    assert(NULL != linky_buffer);
-
     // no need to lock the mutex because nobody else has a reference to linky_buffer yet
-
-    linky_buffer->g_string_list = g_slist_prepend(linky_buffer->g_string_list, message);
-
     gtk_text_view_set_buffer(GTK_TEXT_VIEW(msg), linky_buffer->buffer);
 
     GtkWidget *scroll = put_in_scroll(msg);
     assert(NULL != scroll);
 
-    GString *tab_str;
-    if (ALL == data->type) {
-        tab_str = g_string_new("All");
-        linky_buffer->g_string_list = g_slist_prepend(linky_buffer->g_string_list, tab_str);
-    } else {
-        tab_str = message;
-    }
-
-    gint index = gtk_notebook_append_page(notebook, scroll, tab_label(tab_str->str, scroll));
+    gint index = gtk_notebook_append_page(notebook, scroll, tab_label(linky_buffer->title->str, scroll));
     assert(-1 != index);
     linky_buffer->page_id = index;
 
     // add the new tab to our open tabs list
     assert(0 == pthread_mutex_lock(&self->priv->mutex));
     self->priv->open_tabs_list = g_slist_insert_sorted(self->priv->open_tabs_list, linky_buffer, open_tabs_list_compare_by_id);
-    assert(0 == pthread_mutex_unlock(&self->priv->mutex));
 
     // update the new page
     update_tab((gpointer) linky_buffer, NULL);
@@ -142,6 +132,7 @@ notebook_page_id_t add_new_page_to_notebook(EdsacErrorNotebook *self, Clickable 
     // change to the new page
     gtk_notebook_set_current_page(notebook, index);
 
+    assert(0 == pthread_mutex_unlock(&self->priv->mutex));
     return linky_buffer;
 }
 
@@ -163,7 +154,8 @@ static void free_linky_buffer(LinkyBuffer *linky_buffer) {
 
     g_slist_free_full(linky_buffer->g_string_list, free_g_string);
     g_slist_free_full(linky_buffer->clickables, g_free); // invalid free
-    // don't free the description because it is in someone else's clickables list
+
+    free_g_string(linky_buffer->title);
 
     g_free(linky_buffer);
 }
@@ -231,8 +223,8 @@ static void open_tabs_list_dec_id(gpointer data, __attribute__((unused)) gpointe
     assert(0 == pthread_mutex_unlock(&tab_page_desc->mutex));
 }
 
-// creates a new LinkyBuffer optionally with the given text
-static LinkyBuffer *new_linky_buffer(const char* text, Clickable *desc) {
+// creates a new LinkyBuffer
+static LinkyBuffer *new_linky_buffer(Clickable *desc) {
     LinkyBuffer *linky_buffer = malloc(sizeof(LinkyBuffer));
     assert(NULL != linky_buffer);
 
@@ -246,9 +238,8 @@ static LinkyBuffer *new_linky_buffer(const char* text, Clickable *desc) {
     // set up mutex
     assert(0 == pthread_mutex_init(&linky_buffer->mutex, NULL));
 
-    // set stuff given to us
-    linky_buffer->description = desc;
-    gtk_text_buffer_set_text(linky_buffer->buffer, text, -1);
+    // set description
+    memcpy(&linky_buffer->description, desc, sizeof(linky_buffer->description));
     
     // make the text buffer un-editable
     GtkTextTag *un_editable_tag = gtk_text_buffer_create_tag(linky_buffer->buffer, "un_editable", "editable", FALSE, "editable-set", TRUE, NULL);
@@ -361,7 +352,7 @@ static gint open_tabs_list_compare_by_desc(gconstpointer a, gconstpointer b) {
     assert(0 == pthread_mutex_lock(&A->mutex));
     assert(0 == pthread_mutex_lock(&B->mutex));
 
-    if (clickable_compare(A->description, B->description)) {
+    if (clickable_compare(&A->description, &B->description)) {
         ret = 0;
     } 
 
@@ -376,8 +367,6 @@ static void insert_search_result(gpointer data, gpointer user_data) {
         return;
     }
 
-    puts("insert search result");
-
     SearchResult *res = (SearchResult *) data;
     LinkyBuffer *linky_buffer = (LinkyBuffer *) user_data;
 
@@ -389,10 +378,8 @@ static void update_tab(gpointer data, __attribute__((unused)) gpointer unused) {
     LinkyBuffer *linky_buffer = (LinkyBuffer *) data;
     assert(0 == pthread_mutex_lock(&linky_buffer->mutex));
 
-    puts("update_tab");
-
     // query the database
-    GList *results = search_clickable(linky_buffer->description);
+    GList *results = search_clickable(&linky_buffer->description);
 
     // clear stuff already in the buffer
     GtkTextIter start;
@@ -402,9 +389,8 @@ static void update_tab(gpointer data, __attribute__((unused)) gpointer unused) {
     
     gtk_text_buffer_delete(linky_buffer->buffer, &start, &end);
 
-    // TODO
-    //g_slist_free_full(linky_buffer->g_string_list, free_g_string);
-    // TODO! I don't think we can free the clickables without upsetting other linky_buffers!
+    g_slist_free_full(linky_buffer->g_string_list, free_g_string);
+    g_slist_free_full(linky_buffer->clickables, g_free);
 
     g_list_foreach(results, insert_search_result, (gpointer) linky_buffer);
 
@@ -431,7 +417,7 @@ static void clicked(__attribute__((unused)) const GtkTextTag *tag, const GtkText
         // check if the tab we want is already open
         LinkyBuffer data_desc;
         data_desc.page_id = -1;
-        data_desc.description = data;
+        memcpy(&data_desc.description, data, sizeof(data_desc.description));
         assert(0 == pthread_mutex_init(&data_desc.mutex, NULL));
         assert(0 == pthread_mutex_lock(&notebook->priv->mutex));
         // LinkyBuffer mutex locking done in open_tabs_list_compare_by_desc
@@ -486,7 +472,7 @@ static void close_button_handler(GtkWidget *button, __attribute__((unused)) GdkE
 
         // remove tab from the list
         // TODO are you very sure this shouldn't be g_slist_delete_link?
-        notebook->priv->open_tabs_list = g_slist_remove_link(notebook->priv->open_tabs_list, result);
+        notebook->priv->open_tabs_list = g_slist_delete_link(notebook->priv->open_tabs_list, result);
 
         // free the linky buffer
         free_linky_buffer(tab_page_desc);
