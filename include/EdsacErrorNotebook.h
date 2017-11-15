@@ -63,8 +63,7 @@ typedef struct {
 
 // public methods
 EdsacErrorNotebook *edsac_error_notebook_new(void);
-notebook_page_id_t add_new_page_to_notebook(EdsacErrorNotebook *self, Clickable *data);
-void update(EdsacErrorNotebook *self);
+void edsac_error_notebook_update(volatile EdsacErrorNotebook *self);
 
 // boilerplate public methods
 EdsacErrorNotebook *edsac_error_notebook_construct(GType object_type);

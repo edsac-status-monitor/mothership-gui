@@ -51,6 +51,7 @@ static void free_g_string(gpointer g_string);
 static void free_linky_buffer(LinkyBuffer *linky_buffer);
 static void add_link(size_t start_pos, size_t end_pos, GtkTextBuffer *buffer, Clickable* data);
 static void update_tab(gpointer data, gpointer unused);
+notebook_page_id_t add_new_page_to_notebook(EdsacErrorNotebook *self, Clickable *data);
 
 // GTK
 static GtkWidget *new_text_view(void);
@@ -64,7 +65,7 @@ static void clicked(const GtkTextTag *tag, const GtkTextView *parent, const GdkE
 
 /**** Public Methods ****/
 // update data to be in line with the database
-void update(EdsacErrorNotebook *self) {
+void edsac_error_notebook_update(volatile EdsacErrorNotebook *self) {
     assert(0 == pthread_mutex_lock(&self->priv->mutex));
 
     g_slist_foreach(self->priv->open_tabs_list, update_tab, NULL);
@@ -390,7 +391,9 @@ static void update_tab(gpointer data, __attribute__((unused)) gpointer unused) {
     gtk_text_buffer_delete(linky_buffer->buffer, &start, &end);
 
     g_slist_free_full(linky_buffer->g_string_list, free_g_string);
+    linky_buffer->g_string_list = NULL;
     g_slist_free_full(linky_buffer->clickables, g_free);
+    linky_buffer->clickables = NULL;
 
     g_list_foreach(results, insert_search_result, (gpointer) linky_buffer);
 
