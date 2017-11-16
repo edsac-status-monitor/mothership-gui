@@ -10,10 +10,14 @@ CREATE TABLE nodes(
 );
 
 /* insert some nodes */
-INSERT into nodes(rack_no, chassis_no, mac_address, enabled, config) 
-	VALUES(1, 1, "01:02:03:04", 1, "myconfig");
-INSERT into nodes(rack_no, chassis_no, mac_address, enabled, config) 
-	VALUES(1, 2, "05:06:07:08", 1, "myconfig");
+INSERT INTO nodes(rack_no, chassis_no, mac_address, enabled, config) 
+	VALUES(1, 1, "01:02:03:04:05:06", 1, "myconfig");
+INSERT INTO nodes(rack_no, chassis_no, mac_address, enabled, config) 
+	VALUES(1, 2, "07:08:09:10:11:12", 1, "myconfig");
+INSERT INTO nodes(rack_no, chassis_no, mac_address, enabled, config)
+	VALUES(0, 1, "ff:ff:ff:ff:ff:ff", 1, "Loopback_interface_for_demos");
+INSERT INTO nodes(rack_no, chassis_no, mac_address, enabled, config)
+	VALUES(0, 24, "aa:aa:aa:aa:aa:aa", 1, "rpi");
 
 /* create errors table */
 CREATE TABLE errors(
@@ -83,4 +87,4 @@ UPDATE nodes SET enabled = 1 WHERE rack_no = 1 AND chassis_no = 2;
 INSERT into nodes(rack_no, chassis_no, mac_address, enabled, config) 
 	VALUES(2, 2, "09:10:11:12", 1, "superconfig");
 INSERT into errors(node_id, recv_time, description)
-	VALUES(3, 101, "Tue Nov 14 19:36:01 Software Error: just chilling");
+	VALUES(2, 101, "Tue Nov 14 19:36:01 Software Error: yet another");

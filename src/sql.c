@@ -235,6 +235,9 @@ bool add_error(const BufferItem *error) {
             g_string_append_printf(error_msg, "Software Error: %s",
                 error->msg.data.software.message->str);
 
+            printf("Software Error: %s",
+                error->msg.data.software.message->str);
+
             ret = add_error_decoded(rack_num, chassis_num, -1,
                 error->recv_time, error_msg->str);
             break;

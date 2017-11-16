@@ -1,6 +1,6 @@
 # make static library target
 bin_PROGRAMS = mothership_gui
-mothership_gui_SOURCES = src/main.c src/EdsacErrorNotebook.c include/EdsacErrorNotebook.h src/sql.c src/sql.h
+mothership_gui_SOURCES = src/main.c src/EdsacErrorNotebook.c include/EdsacErrorNotebook.h src/sql.c include/sql.h src/ui.c include/ui.h
 mothership_gui_LDADD = $(GLIB_LIBS) $(GTK_LIBS) $(LIBEDSACNETWORKING_LIBS) $(PTHREAD_LIBS) $(SQLITE_LIBS)
 
 # make subdirectories work
@@ -12,7 +12,7 @@ AM_CFLAGS = -Wall -Wextra -pedantic -Wshadow -Wpointer-arith -Wcast-align -Wwrit
 
 # Unit tests
 check_PROGRAMS = sql.test
-sql_test_SOURCES = src/test/sql-test.c src/sql.c src/sql.h
+sql_test_SOURCES = src/test/sql-test.c src/sql.c include/sql.h
 sql_test_LDADD = $(PTHREAD_LIBS) $(SQLITE_LIBS) $(GLIB_LIBS) $(LIBEDSACNETWORKING_LIBS)
 TESTS = sql.test
 
