@@ -47,15 +47,31 @@ static void periodic_update(__attribute__((unused)) void *unused) {
     }
 }
 
+static gboolean version_option_callback(__attribute__((unused)) gchar *option_name, __attribute__((unused)) gchar *value,
+                                 __attribute__((unused)) gpointer data, __attribute__((unused)) GError **error) {
+    puts(PACKAGE_STRING);
+    exit(EXIT_SUCCESS);
+}
+
 int main(int argc, char** argv) {
     const time_t update_time = 2; // seconds
     timer_t timer_id = NULL;
 
-    init_database();
+    // option arguments new for this
+    #pragma GCC diagnostic push
+    #pragma GCC diagnostic ignored "-Wpedantic"
+    GOptionEntry entries[] = {
+        {"version", 'v', G_OPTION_FLAG_NO_ARG, G_OPTION_ARG_CALLBACK, version_option_callback, NULL, NULL},
+        {NULL}
+    };
+    #pragma GCC diagnostic pop
+
+    struct sockaddr *addr = get_args(&argc, &argv, gtk_get_option_group(TRUE), entries);
+    assert(NULL != addr);
+
+    init_database(DEFAULT_DB_PATH);
     assert(true == create_timer((timer_handler_t) periodic_update, &timer_id, update_time));
 
-    struct sockaddr *addr = get_args(&argc, &argv, gtk_get_option_group(TRUE));
-    assert(NULL != addr);
     assert (true == start_server(addr, sizeof(*addr)));
 
     return start_ui(&argc, &argv, (gpointer) &timer_id);

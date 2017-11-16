@@ -22,7 +22,8 @@
 int main(void) {
     const unsigned int test_num = 248;
     const char* correct_mac = "ff:ff:ff:ff:ff:ff";
-    init_database();
+    init_database(NULL); // memory only database
+    assert(true == create_tables());
 
     // invalid mac address
     assert(false == add_node(test_num, test_num, "not a mac address", false, "myconfig"));

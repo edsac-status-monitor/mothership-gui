@@ -18,8 +18,6 @@
 #include <arpa/inet.h>
 #include <stdlib.h>
 
-#define DEFAULT_DB_PATH "./mothership.db"
-
 static sqlite3 *db = NULL;
 
 // functions
@@ -69,8 +67,37 @@ static GString *fix_string(const char* str) {
     return ret;
 }
 
-void init_database(void) {
-    assert(SQLITE_OK == sqlite3_open(DEFAULT_DB_PATH, &db));
+bool create_tables(void) {
+    const char *table_create_sql = \
+    "CREATE TABLE nodes(\
+	    id INTEGER PRIMARY KEY NOT NULL UNIQUE,\
+	    rack_no INTEGER NOT NULL,\
+	    chassis_no INTEGER NOT NULL,\
+	    mac_address TEXT NOT NULL,\
+	    enabled INTEGER DEFAULT 1,\
+	    config TEXT NOT NULL,\
+	    UNIQUE(rack_no, chassis_no)\
+    );\
+    CREATE TABLE errors(\
+	    id INTEGER PRIMARY KEY NOT NULL UNIQUE,\
+	    node_id INTEGER NOT NULL,\
+	    recv_time INTEGER NOT NULL,\
+	    description TEXT NOT NULL,\
+	    valve_no INTEGER DEFAULT -1,\
+	    enabled INTEGER DEFAULT 1\
+    );";
+
+    char *errstr = NULL;
+    if (SQLITE_OK != sqlite3_exec(db, table_create_sql, NULL, NULL, &errstr)) {
+        puts(errstr);
+        return false;
+    }
+
+    return true;
+}
+
+void init_database(const char *path) {
+    assert(SQLITE_OK == sqlite3_open(path, &db));
 }
 
 void close_database(void) {
