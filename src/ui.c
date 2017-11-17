@@ -20,6 +20,7 @@ static void activate(GtkApplication *app, gpointer data);
 static void shutdown_handler(__attribute__((unused)) GApplication *app, gpointer user_data);
 
 static EdsacErrorNotebook *notebook = NULL;
+static GtkStatusbar *bar = NULL;
 
 // functions
 
@@ -37,15 +38,36 @@ int start_ui(int *argc, char ***argv, gpointer timer_id) {
     return g_application_run(G_APPLICATION(app), *argc, *argv);
 }
 
+static void update_bar(void) {
+    const int num_errors = edsac_error_notebook_get_error_count(notebook);
+
+    GString *msg = g_string_new(NULL);
+    assert(NULL != msg);
+
+    if (num_errors > 1) {
+        g_string_sprintf(msg, "Showing %i errors", num_errors);
+    } else if (1 == num_errors) {
+        g_string_sprintf(msg, "Showing 1 error");
+    } else if (0 == num_errors) {
+        g_string_sprintf(msg, "No errors in this filter");
+    } else { // negative
+        g_string_sprintf(msg, "Failure to count errors (something is probably very wrong)");
+    }
+
+
+    gtk_statusbar_push(bar, 0, msg->str);
+    g_string_free(msg, TRUE);
+}
+
 // called when gtk gets around to updating the gui
 void gui_update(gpointer g_idle_id) {
     assert(TRUE == g_idle_remove_by_data(g_idle_id));
     edsac_error_notebook_update(notebook);
-    printf("Displaying %i errors\n", edsac_error_notebook_get_error_count(notebook));
+    update_bar();
 }
 
 static void page_change_callback(__attribute__((unused)) EdsacErrorNotebook *context) {
-    printf("Displaying %i errors\n", edsac_error_notebook_get_error_count(notebook));
+    update_bar();
 }
 
 // activate handler for the application
@@ -61,13 +83,18 @@ static void activate(GtkApplication *app, __attribute__((unused)) gpointer data)
     gtk_window_set_geometry_hints(GTK_WINDOW(window), NULL, &geometry, GDK_HINT_MIN_SIZE);
 
     // GTKBox to hold stuff
-    GtkBox *box = GTK_BOX(gtk_box_new(GTK_ORIENTATION_VERTICAL, 5 /*arbitrary: a guess*/));
+    GtkBox *box = GTK_BOX(gtk_box_new(GTK_ORIENTATION_VERTICAL, 0 /*arbitrary: a guess*/));
 
     // make notebook
     notebook = edsac_error_notebook_new();
-//    edsac_error_notebook_set_page_change_callback(notebook, page_change_callback);
     g_signal_connect_after(G_OBJECT(notebook), "switch-page", G_CALLBACK(page_change_callback), NULL);
     gtk_box_pack_start(box, GTK_WIDGET(notebook), TRUE, TRUE, 0);
+
+    // make status bar
+    bar = GTK_STATUSBAR(gtk_statusbar_new());
+    assert(NULL != bar);
+    update_bar();
+    gtk_box_pack_start(box, GTK_WIDGET(bar), FALSE, FALSE, 0);
 
     gtk_container_add(GTK_CONTAINER(window), GTK_WIDGET(box));
     gtk_widget_show_all(window);

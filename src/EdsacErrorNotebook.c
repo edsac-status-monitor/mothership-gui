@@ -34,7 +34,6 @@ typedef struct _LinkyTextBuffer {
 typedef struct _EdsacErrorNotebookPrivate {
     pthread_mutex_t mutex;  // controlls access to this structure
     GSList *open_tabs_list; // list of open tabs (LinkyBuffers)
-//    void (*page_change_callback)(EdsacErrorNotebook *context); // callback for when we change the current page
 } EdsacErrorNotebookPrivate;
 
 static gpointer edsac_error_notebook_parent_class = NULL;
