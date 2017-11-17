@@ -9,16 +9,12 @@
 #include "config.h"
 #include <glib.h>
 #include <stdlib.h>
-#include "EdsacErrorNotebook.h"
 #include <edsac_timer.h>
 #include <edsac_arguments.h>
 #include <edsac_server.h>
 #include "sql.h"
 #include <assert.h>
 #include "ui.h"
-
-// ui.c
-extern EdsacErrorNotebook *notebook;
 
 // functions
 
@@ -43,7 +39,10 @@ static void periodic_update(__attribute__((unused)) void *unused) {
     }
 
     if (need_update) {
-        g_idle_add((GSourceFunc) edsac_error_notebook_update, (gpointer) notebook);
+        #pragma GCC diagnostic push
+        #pragma GCC diagnostic ignored "-Wpedantic"
+        g_idle_add((GSourceFunc) gui_update, (gpointer) gui_update); // uses the data parameter to remove itself from g_idle once it has run once
+        #pragma GCC diagnostic pop
     }
 }
 

@@ -19,8 +19,7 @@
 static void activate(GtkApplication *app, gpointer data);
 static void shutdown_handler(__attribute__((unused)) GApplication *app, gpointer user_data);
 
-// also used in the periodic update handler in main.c
-EdsacErrorNotebook *notebook = NULL;
+static EdsacErrorNotebook *notebook = NULL;
 
 // functions
 
@@ -36,6 +35,17 @@ int start_ui(int *argc, char ***argv, gpointer timer_id) {
     g_signal_connect(app, "shutdown", G_CALLBACK(shutdown_handler), timer_id);
     
     return g_application_run(G_APPLICATION(app), *argc, *argv);
+}
+
+// called when gtk gets around to updating the gui
+void gui_update(gpointer g_idle_id) {
+    assert(TRUE == g_idle_remove_by_data(g_idle_id));
+    edsac_error_notebook_update(notebook);
+    printf("Displaying %i errors\n", edsac_error_notebook_get_error_count(notebook));
+}
+
+static void page_change_callback(__attribute__((unused)) EdsacErrorNotebook *context) {
+    printf("Displaying %i errors\n", edsac_error_notebook_get_error_count(notebook));
 }
 
 // activate handler for the application
@@ -55,6 +65,8 @@ static void activate(GtkApplication *app, __attribute__((unused)) gpointer data)
 
     // make notebook
     notebook = edsac_error_notebook_new();
+//    edsac_error_notebook_set_page_change_callback(notebook, page_change_callback);
+    g_signal_connect_after(G_OBJECT(notebook), "switch-page", G_CALLBACK(page_change_callback), NULL);
     gtk_box_pack_start(box, GTK_WIDGET(notebook), TRUE, TRUE, 0);
 
     gtk_container_add(GTK_CONTAINER(window), GTK_WIDGET(box));

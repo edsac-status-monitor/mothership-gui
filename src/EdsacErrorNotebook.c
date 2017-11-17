@@ -34,6 +34,7 @@ typedef struct _LinkyTextBuffer {
 typedef struct _EdsacErrorNotebookPrivate {
     pthread_mutex_t mutex;  // controlls access to this structure
     GSList *open_tabs_list; // list of open tabs (LinkyBuffers)
+//    void (*page_change_callback)(EdsacErrorNotebook *context); // callback for when we change the current page
 } EdsacErrorNotebookPrivate;
 
 static gpointer edsac_error_notebook_parent_class = NULL;
@@ -45,12 +46,14 @@ static bool clickable_compare(const Clickable *a, const Clickable *b);
 static gint open_tabs_list_compare_by_id(gconstpointer a, gconstpointer b);
 static gint open_tabs_list_compare_by_desc(gconstpointer a, gconstpointer b);
 static void open_tabs_list_dec_id(gpointer data, gpointer unused);
+static gint open_tabs_list_search_by_id(gconstpointer result, gconstpointer id);
 static LinkyBuffer *new_linky_buffer(Clickable *description);
 static void append_linky_text_buffer(LinkyBuffer *linky_buffer, const unsigned int rack_no, const unsigned int chassis_no, const int valve_no, const char* msg);
 static void free_g_string(gpointer g_string);
 static void free_linky_buffer(LinkyBuffer *linky_buffer);
 static void add_link(size_t start_pos, size_t end_pos, GtkTextBuffer *buffer, Clickable* data);
 static void update_tab(gpointer data, gpointer unused);
+//static void change_page_callback()
 notebook_page_id_t add_new_page_to_notebook(EdsacErrorNotebook *self, Clickable *data);
 
 // GTK
@@ -65,13 +68,38 @@ static void clicked(const GtkTextTag *tag, const GtkTextView *parent, const GdkE
 
 /**** Public Methods ****/
 // update data to be in line with the database
-void edsac_error_notebook_update(volatile EdsacErrorNotebook *self) {
+void edsac_error_notebook_update(EdsacErrorNotebook *self) {
     assert(0 == pthread_mutex_lock(&self->priv->mutex));
 
     g_slist_foreach(self->priv->open_tabs_list, update_tab, NULL);
 
     assert(0 == pthread_mutex_unlock(&self->priv->mutex));
 }
+
+// get the error count for the currently displayed page
+int edsac_error_notebook_get_error_count(EdsacErrorNotebook *self) {
+    assert(NULL != self);
+
+    const gint current_page = gtk_notebook_get_current_page(&self->parent_instance);
+    if (-1 == current_page) {
+        puts("bad current page");
+        return -1;
+    }
+
+    // look up the current page
+    assert(0 == pthread_mutex_lock(&self->priv->mutex));
+    GSList *result = g_slist_find_custom(self->priv->open_tabs_list, (gconstpointer) &current_page, open_tabs_list_search_by_id);
+    assert(0 == pthread_mutex_unlock(&self->priv->mutex));
+
+    if (NULL == result) {
+        puts("current page not found");
+        return -1;
+    } 
+
+    LinkyBuffer *linky_buffer = (LinkyBuffer *) result->data;
+    return count_clickable(&linky_buffer->description);
+}
+
 
 // add a new page to the notebook
 notebook_page_id_t add_new_page_to_notebook(EdsacErrorNotebook *self, Clickable *data) {
@@ -131,9 +159,9 @@ notebook_page_id_t add_new_page_to_notebook(EdsacErrorNotebook *self, Clickable 
     gtk_widget_show_all(page);
 
     // change to the new page
+    assert(0 == pthread_mutex_unlock(&self->priv->mutex));
     gtk_notebook_set_current_page(notebook, index);
 
-    assert(0 == pthread_mutex_unlock(&self->priv->mutex));
     return linky_buffer;
 }
 
@@ -222,6 +250,21 @@ static void open_tabs_list_dec_id(gpointer data, __attribute__((unused)) gpointe
     tab_page_desc->page_id -= 1;
 
     assert(0 == pthread_mutex_unlock(&tab_page_desc->mutex));
+}
+
+// returns 0 if linky_buffer matches the id
+static gint open_tabs_list_search_by_id(gconstpointer result, gconstpointer id) {
+    assert(NULL != id);
+    assert(NULL != result);
+
+    const LinkyBuffer *linky_buffer = (LinkyBuffer *) result;
+    const gint page_id = *((gint *) id);
+    
+    if (linky_buffer->page_id == page_id) {
+        return 0;
+    }
+    
+    return 1;
 }
 
 // creates a new LinkyBuffer

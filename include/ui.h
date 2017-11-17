@@ -19,6 +19,8 @@ extern "C" {
 // declarations
 int start_ui(int *argc, char ***argv, gpointer timer_id);
 
+void gui_update(gpointer g_idle_id);
+
 #ifdef _cplusplus
 }
 #endif // _cplusplus
