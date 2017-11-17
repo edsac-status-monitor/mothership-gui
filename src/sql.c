@@ -290,18 +290,19 @@ void free_search_result(gpointer res) {
     g_free(result);
 }
 
-GList *search_clickable(const Clickable *search) {
+static GString *clickable_query(const Clickable *search, const char* fields) {
     if (NULL == search) {
         return NULL;
     }
 
     // construct query
-    GString *query = g_string_new("SELECT errors.description, nodes.rack_no, nodes.chassis_no, errors.valve_no \
+    GString *query = g_string_new("SELECT"); 
+    assert(NULL != query);
+    g_string_append_printf(query, " %s \
                     FROM errors \
                     INNER JOIN nodes \
                     ON errors.node_id = nodes.id \
-                    WHERE nodes.enabled = 1 AND errors.enabled = 1 "); 
-    assert(NULL != query);
+                    WHERE nodes.enabled = 1 AND errors.enabled = 1 ", fields); 
 
     switch(search->type) {
         case ALL:
@@ -319,6 +320,15 @@ GList *search_clickable(const Clickable *search) {
             g_string_free(query, TRUE);
             g_print("I don't know how to search for that!\n");
             return NULL;
+    }
+
+    return query;
+}
+
+GList *search_clickable(const Clickable *search) {
+    GString *query = clickable_query(search, "errors.description, nodes.rack_no, nodes.chassis_no, errors.valve_no");
+    if (NULL == query) {
+        return NULL;
     }
     g_string_append(query, " ORDER BY errors.recv_time;");
 
@@ -366,3 +376,29 @@ GList *search_clickable(const Clickable *search) {
 
     return results;
 }    
+
+int count_clickable(const Clickable *search) {
+    GString *query = clickable_query(search, "Count(*)");
+    if (NULL == query) {
+        return -1;
+    }
+    g_string_append_c(query, ';');
+
+    sqlite3_stmt *statement = NULL;
+    if (SQLITE_OK != sqlite3_prepare_v2(db, query->str, -1, &statement, NULL)) {
+        g_string_free(query, TRUE);
+        return -1;
+    }
+    g_string_free(query, TRUE);
+
+    // there should only be one row
+    if (SQLITE_ROW != sqlite3_step(statement)) {
+        assert(SQLITE_OK == sqlite3_finalize(statement));
+        return -1;
+    }
+
+    int count = sqlite3_column_int(statement, 0);
+    assert(SQLITE_OK == sqlite3_finalize(statement));
+
+    return count;
+}

@@ -118,12 +118,22 @@ int main(void) {
     assert(true == add_node(0, 1, correct_mac, true, "myconfig"));
     assert(true == add_node(0, 2, correct_mac, true, "myconfig"));
 
+    // for count searching
+    Clickable search;
+    search.type = RACK;
+    search.rack_num = 0;
+
+    // there shouldn't be any errors in rack 0 to start with
+    assert(0 == count_clickable(&search));
+
     // hard_error_valve error
     BufferItem *hard_error_valve = error(0, 0, "hard valve", HARD_ERROR_VALVE);
     assert(true == add_error(hard_error_valve));
     free(hard_error_valve); // we don't need to do a free_bufferitem because the string is static
     hard_error_valve = NULL;
     search_error(0, 0, "hard valve", HARD_ERROR_VALVE);
+
+    assert(1 == count_clickable(&search));
 
     // hard_error_other error
     BufferItem *hard_error_other = error(0, 1, "hard other", HARD_ERROR_OTHER);
@@ -132,6 +142,8 @@ int main(void) {
     hard_error_other = NULL;
     search_error(0, 1, "hard other", HARD_ERROR_OTHER);
 
+    assert(2 == count_clickable(&search));
+
     // software error
     BufferItem *soft_error = error(0, 2, "soft error", SOFT_ERROR);
     assert(true == add_error(soft_error));
@@ -139,16 +151,31 @@ int main(void) {
     soft_error = NULL;
     search_error(0, 2, "soft error", SOFT_ERROR);
 
+    assert(3 == count_clickable(&search));
+
     // clean up
     assert(true == remove_all_errors());
 
     // check that all of those errors were removed
-    Clickable search;
-    search.type = RACK;
-    search.rack_num = 0;
-    GList *results = search_clickable(&search);
-    assert(NULL == results);
+    assert(0 == count_clickable(&search));   
 
+    // add errors back again on node 0, 0
+    assert(true == add_error(error(0, 0, "", HARD_ERROR_VALVE)));
+    assert(true == add_error(error(0, 0, "", HARD_ERROR_OTHER)));
+    assert(true == add_error(error(0, 0, "", SOFT_ERROR)));
+    Clickable node00_search;
+    node00_search.type = CHASSIS;
+    node00_search.rack_num = 0;
+    node00_search.chassis_num = 0;
+    assert(3 == count_clickable(&node00_search));
+
+    // remove node 0, 0
+    assert(true == remove_node(0, 0));
+
+    // check that node 0, 0's errors were also removed
+    assert(0 == count_clickable(&node00_search));
+    
     assert(true == remove_node(0, 1));
+    assert(true == remove_node(0, 2));
     close_database();
 }
