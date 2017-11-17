@@ -26,8 +26,6 @@ typedef struct {
     int valve_no;
 } SearchResult;
 
-#define DEFAULT_DB_PATH "./mothership.db"
-
 // declarations
 void free_search_result(gpointer res);
 

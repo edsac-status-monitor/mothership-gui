@@ -52,15 +52,20 @@ static gboolean version_option_callback(__attribute__((unused)) gchar *option_na
     exit(EXIT_SUCCESS);
 }
 
+#define DEFAULT_DB_PATH "./mothership.db"
+
 int main(int argc, char** argv) {
     const time_t update_time = 2; // seconds
     timer_t timer_id = NULL;
 
     // option arguments new for this
+    char *db_path = NULL;
+    bool db_path_set = true;
     #pragma GCC diagnostic push
     #pragma GCC diagnostic ignored "-Wpedantic"
     GOptionEntry entries[] = {
         {"version", 'v', G_OPTION_FLAG_NO_ARG, G_OPTION_ARG_CALLBACK, version_option_callback, NULL, NULL},
+        {"db-path", 'd', G_OPTION_FLAG_NONE, G_OPTION_ARG_FILENAME, &db_path, "Path to the database file", "PATH"},
         {NULL}
     };
     #pragma GCC diagnostic pop
@@ -68,7 +73,18 @@ int main(int argc, char** argv) {
     struct sockaddr *addr = get_args(&argc, &argv, gtk_get_option_group(TRUE), entries);
     assert(NULL != addr);
 
-    init_database(DEFAULT_DB_PATH);
+    if (NULL == db_path) {
+        init_database(DEFAULT_DB_PATH);
+        db_path_set = false;
+    } else {
+        init_database(db_path);
+    }
+
+
+    if (db_path_set) {
+        g_free(db_path);
+    }
+
     assert(true == create_timer((timer_handler_t) periodic_update, &timer_id, update_time));
 
     assert (true == start_server(addr, sizeof(*addr)));

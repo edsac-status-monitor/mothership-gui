@@ -55,6 +55,7 @@ static void update_bar(void) {
     }
 
 
+    gtk_statusbar_pop(bar, 0);
     gtk_statusbar_push(bar, 0, msg->str);
     g_string_free(msg, TRUE);
 }

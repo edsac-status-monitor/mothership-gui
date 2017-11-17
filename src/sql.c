@@ -97,7 +97,36 @@ bool create_tables(void) {
 }
 
 void init_database(const char *path) {
-    assert(SQLITE_OK == sqlite3_open(path, &db));
+    bool new_db = true;
+    if ((NULL != path) && (0 != strncmp("", path, 1))) {
+        // check to see if the database already exists
+        if (0 == access(path, F_OK)) {
+            // file exists
+            new_db = false;
+
+            // check that we have read and write permissions on the file
+            if (0 != access(path, W_OK | R_OK)) {
+                fprintf(stderr, "I don't have permission to access database file %s\n", path);
+                exit(EXIT_FAILURE);
+            } else {
+                printf("Using existing database at %s\n", path);
+                // open database with sqlite
+                assert(SQLITE_OK == sqlite3_open(path, &db));
+            }
+        } else {
+            printf("Creating a new database at %s\n", path);
+            // open database with sqlite
+            assert(SQLITE_OK == sqlite3_open(path, &db));
+        }
+    } else {
+        puts("Creating memory resident database");
+        // open database with sqlite
+        assert(SQLITE_OK == sqlite3_open(NULL, &db));
+    }
+
+    if (new_db) {
+        create_tables();
+    }
 }
 
 void close_database(void) {
@@ -260,9 +289,6 @@ bool add_error(const BufferItem *error) {
 
         case SOFT_ERROR:
             g_string_append_printf(error_msg, "Software Error: %s",
-                error->msg.data.software.message->str);
-
-            printf("Software Error: %s",
                 error->msg.data.software.message->str);
 
             ret = add_error_decoded(rack_num, chassis_num, -1,
