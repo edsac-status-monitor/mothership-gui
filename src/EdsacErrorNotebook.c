@@ -146,6 +146,14 @@ notebook_page_id_t add_new_page_to_notebook(EdsacErrorNotebook *self, Clickable 
     assert(-1 != index);
     linky_buffer->page_id = index;
 
+    // set child property
+    GtkWidget *child = gtk_notebook_get_nth_page(notebook, index);
+    GValue value;
+    memset(&value, 0, sizeof(value));
+    g_value_init(&value, G_TYPE_BOOLEAN);
+    g_value_set_boolean(&value, TRUE);
+    gtk_container_child_set_property(GTK_CONTAINER(notebook), child, "tab-expand", &value);
+
     // add the new tab to our open tabs list
     assert(0 == pthread_mutex_lock(&self->priv->mutex));
     self->priv->open_tabs_list = g_slist_insert_sorted(self->priv->open_tabs_list, linky_buffer, open_tabs_list_compare_by_id);
@@ -574,22 +582,23 @@ static GtkWidget *tab_label(const char *msg, GtkWidget *contents) {
     assert(NULL != msg);
     assert(NULL != contents);
 
-    // text
-    GtkWidget *text = gtk_label_new(msg);
+    // text - using a status bar so that the style matches
+    //GtkWidget *text = gtk_label_new(msg);
+    GtkWidget *text = gtk_statusbar_new();
+    gtk_statusbar_push(GTK_STATUSBAR(text), 0, msg);
 
     // close button
     GtkWidget *close = gtk_button_new_from_icon_name("window-close", GTK_ICON_SIZE_BUTTON);
     g_signal_connect(G_OBJECT(close), "button-press-event", (GCallback) close_button_handler, contents);
 
     // container
-    GtkWidget *grid = gtk_grid_new();
-    gtk_grid_set_row_spacing(GTK_GRID(grid), 3);
-    gtk_grid_attach(GTK_GRID(grid), text, 1, 1, 1, 1);
-    gtk_grid_attach(GTK_GRID(grid), close, 2, 1, 1, 1);
+    GtkWidget *box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 1);
+    gtk_box_pack_start(GTK_BOX(box), text, TRUE, TRUE, 0);
+    gtk_box_pack_start(GTK_BOX(box), close, FALSE, FALSE, 0);
 
     // put it in a frame so we get boarders
     GtkWidget *frame = gtk_frame_new(NULL);
-    gtk_container_add(GTK_CONTAINER(frame), grid);
+    gtk_container_add(GTK_CONTAINER(frame), box);
 
     gtk_widget_show_all(frame);
     return GTK_WIDGET(frame);
@@ -645,10 +654,6 @@ static void edsac_error_notebook_instance_init(EdsacErrorNotebook *self) {
 
     LinkyBuffer *all = (LinkyBuffer *) add_new_page_to_notebook(self, all_desc);
     assert(NULL != all);
-
-    // dummy data
-    //append_linky_text_buffer(all, 1, 2, 3, "4");
-    //append_linky_text_buffer(all, 1, 2, -1, "No valve");
 
     gtk_notebook_set_scrollable(&self->parent_instance, TRUE);
 }

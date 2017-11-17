@@ -66,10 +66,6 @@ void gui_update(gpointer g_idle_id) {
     update_bar();
 }
 
-static void page_change_callback(__attribute__((unused)) EdsacErrorNotebook *context) {
-    update_bar();
-}
-
 // activate handler for the application
 static void activate(GtkApplication *app, __attribute__((unused)) gpointer data) {
     GtkWidget *window = gtk_application_window_new(app);
@@ -87,7 +83,7 @@ static void activate(GtkApplication *app, __attribute__((unused)) gpointer data)
 
     // make notebook
     notebook = edsac_error_notebook_new();
-    g_signal_connect_after(G_OBJECT(notebook), "switch-page", G_CALLBACK(page_change_callback), NULL);
+    g_signal_connect_after(G_OBJECT(notebook), "switch-page", G_CALLBACK(update_bar), NULL);
     gtk_box_pack_start(box, GTK_WIDGET(notebook), TRUE, TRUE, 0);
 
     // make status bar
