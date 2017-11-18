@@ -35,6 +35,10 @@ void close_database(void);
 // false on error
 bool create_tables(void);
 
+// only effects things which search on clickables
+void set_show_disabled(bool new_val);
+bool get_show_disabled(void);
+
 bool add_node(const unsigned int rack_no, const unsigned int chassis_no, const char* mac_address, const bool enabled, const char* config_path);
 bool remove_node(const unsigned int rack_no, const unsigned int chassis_no);
 

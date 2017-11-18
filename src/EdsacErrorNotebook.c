@@ -21,7 +21,6 @@
 
 // context for an open tab
 typedef struct _LinkyTextBuffer {
-//    pthread_mutex_t mutex;  // controlls access to the structure
     Clickable description; // information about what this is a list of
     GtkTextBuffer *buffer;  // the text buffer
     GSList *g_string_list;  // stuff to call g_string_free(., TRUE) on when we clear buffer
@@ -32,7 +31,6 @@ typedef struct _LinkyTextBuffer {
 
 // private object data
 typedef struct _EdsacErrorNotebookPrivate {
-//    pthread_mutex_t mutex;  // controlls access to this structure
     GSList *open_tabs_list; // list of open tabs (LinkyBuffers)
 } EdsacErrorNotebookPrivate;
 
@@ -67,11 +65,7 @@ static void clicked(const GtkTextTag *tag, const GtkTextView *parent, const GdkE
 /**** Public Methods ****/
 // update data to be in line with the database
 void edsac_error_notebook_update(EdsacErrorNotebook *self) {
-//    assert(0 == pthread_mutex_lock(&self->priv->mutex));
-
     g_slist_foreach(self->priv->open_tabs_list, update_tab, NULL);
-
-//    assert(0 == pthread_mutex_unlock(&self->priv->mutex));
 }
 
 // get the error count for the currently displayed page
@@ -85,9 +79,7 @@ int edsac_error_notebook_get_error_count(EdsacErrorNotebook *self) {
     }
 
     // look up the current page
-//    assert(0 == pthread_mutex_lock(&self->priv->mutex));
     GSList *result = g_slist_find_custom(self->priv->open_tabs_list, (gconstpointer) &current_page, open_tabs_list_search_by_id);
-//    assert(0 == pthread_mutex_unlock(&self->priv->mutex));
 
     if (NULL == result) {
         puts("current page not found");
@@ -103,11 +95,7 @@ void edsac_error_notebook_show_page(EdsacErrorNotebook *self, Clickable *data) {
     LinkyBuffer data_desc;
     data_desc.page_id = -1;
     memcpy(&data_desc.description, data, sizeof(data_desc.description));
-//    assert(0 == pthread_mutex_init(&data_desc.mutex, NULL));
-//    assert(0 == pthread_mutex_lock(&self->priv->mutex));
-    // LinkyBuffer mutex locking done in open_tabs_list_compare_by_desc
     GSList *found = g_slist_find_custom(self->priv->open_tabs_list, (gconstpointer) &data_desc, open_tabs_list_compare_by_desc);
-//    assert(0 == pthread_mutex_unlock(&self->priv->mutex));
     if (NULL != found) {
         LinkyBuffer *tab = (LinkyBuffer *) found->data;
         assert(NULL != tab);
@@ -157,7 +145,6 @@ static notebook_page_id_t add_new_page_to_notebook(EdsacErrorNotebook *self, Cli
     GtkWidget *msg = new_text_view(); 
     assert(NULL != msg);
 
-    // no need to lock the mutex because nobody else has a reference to linky_buffer yet
     gtk_text_view_set_buffer(GTK_TEXT_VIEW(msg), linky_buffer->buffer);
 
     GtkWidget *scroll = put_in_scroll(msg);
@@ -176,7 +163,6 @@ static notebook_page_id_t add_new_page_to_notebook(EdsacErrorNotebook *self, Cli
     gtk_container_child_set_property(GTK_CONTAINER(notebook), child, "tab-expand", &value);
 
     // add the new tab to our open tabs list
-//    assert(0 == pthread_mutex_lock(&self->priv->mutex));
     self->priv->open_tabs_list = g_slist_insert_sorted(self->priv->open_tabs_list, linky_buffer, open_tabs_list_compare_by_id);
 
     // update the new page
@@ -187,7 +173,6 @@ static notebook_page_id_t add_new_page_to_notebook(EdsacErrorNotebook *self, Cli
     gtk_widget_show_all(page);
 
     // change to the new page
-//    assert(0 == pthread_mutex_unlock(&self->priv->mutex));
     gtk_notebook_set_current_page(notebook, index);
 
     return linky_buffer;
@@ -207,7 +192,6 @@ static void free_g_string(gpointer g_string) {
 static void free_linky_buffer(LinkyBuffer *linky_buffer) {
     assert(NULL != linky_buffer);
 
-//    assert(0 == pthread_mutex_destroy(&linky_buffer->mutex));
 
     g_slist_free_full(linky_buffer->g_string_list, free_g_string);
     g_slist_free_full(linky_buffer->clickables, g_free); // invalid free
@@ -257,13 +241,7 @@ static gint open_tabs_list_compare_by_id(gconstpointer a, gconstpointer b) {
     LinkyBuffer *A = (LinkyBuffer *) a;
     LinkyBuffer *B = (LinkyBuffer *) b;
 
-//    assert(0 == pthread_mutex_lock(&A->mutex));
-//    assert(0 == pthread_mutex_lock(&B->mutex));
-
     const gint ret = A->page_id - B->page_id;
-
-//    assert(0 == pthread_mutex_unlock(&A->mutex));
-//    assert(0 == pthread_mutex_unlock(&B->mutex));
 
     return ret;
 }
@@ -273,11 +251,8 @@ static void open_tabs_list_dec_id(gpointer data, __attribute__((unused)) gpointe
     assert(NULL != data);
 
     LinkyBuffer *tab_page_desc = (LinkyBuffer *) data;
-//    assert(0 == pthread_mutex_lock(&tab_page_desc->mutex));
  
     tab_page_desc->page_id -= 1;
-
-//    assert(0 == pthread_mutex_unlock(&tab_page_desc->mutex));
 }
 
 // returns 0 if linky_buffer matches the id
@@ -306,9 +281,6 @@ static LinkyBuffer *new_linky_buffer(Clickable *desc) {
     linky_buffer->page_id = -1;
     linky_buffer->buffer = gtk_text_buffer_new(NULL);
     assert(NULL != linky_buffer->buffer);
-
-    // set up mutex
-//    assert(0 == pthread_mutex_init(&linky_buffer->mutex, NULL));
 
     // set description
     memcpy(&linky_buffer->description, desc, sizeof(linky_buffer->description));
@@ -421,15 +393,9 @@ static gint open_tabs_list_compare_by_desc(gconstpointer a, gconstpointer b) {
 
     gint ret = 1;
 
-//    assert(0 == pthread_mutex_lock(&A->mutex));
-//    assert(0 == pthread_mutex_lock(&B->mutex));
-
     if (clickable_compare(&A->description, &B->description)) {
         ret = 0;
     } 
-
-//    assert(0 == pthread_mutex_unlock(&A->mutex));
-//    assert(0 == pthread_mutex_unlock(&B->mutex));
 
     return ret;
 }
@@ -448,7 +414,6 @@ static void insert_search_result(gpointer data, gpointer user_data) {
 static void update_tab(gpointer data, __attribute__((unused)) gpointer unused) {
     assert(NULL != data);
     LinkyBuffer *linky_buffer = (LinkyBuffer *) data;
-//    assert(0 == pthread_mutex_lock(&linky_buffer->mutex));
 
     // query the database
     GList *results = search_clickable(&linky_buffer->description);
@@ -467,8 +432,6 @@ static void update_tab(gpointer data, __attribute__((unused)) gpointer unused) {
     linky_buffer->clickables = NULL;
 
     g_list_foreach(results, insert_search_result, (gpointer) linky_buffer);
-
-//    assert(0 == pthread_mutex_unlock(&linky_buffer->mutex));
 }
 
 
@@ -510,12 +473,9 @@ static void close_button_handler(GtkWidget *button, __attribute__((unused)) GdkE
     // try to find this tab in the open tabs list
     LinkyBuffer example;
     example.page_id = page_num;
-//    assert(0 == pthread_mutex_init(&example.mutex, NULL));
-//    assert(0 == pthread_mutex_lock(&notebook->priv->mutex));
-    // open_tabs_list_compate_by_id does the locking on the LinkyBuffers
+
     GSList *result = g_slist_find_custom(notebook->priv->open_tabs_list, (gconstpointer) &example, open_tabs_list_compare_by_id);
     if (NULL == result) {
-//        assert(0 == pthread_mutex_unlock(&notebook->priv->mutex));
         g_print("Closing a tab which was not open! id=%i\n", page_num);
         return;
     } else {
@@ -534,8 +494,6 @@ static void close_button_handler(GtkWidget *button, __attribute__((unused)) GdkE
 
         // remove page from notebook
         gtk_notebook_remove_page(GTK_NOTEBOOK(notebook), page_num);
-
-//        assert(0 == pthread_mutex_unlock(&notebook->priv->mutex));
 
         // close the window if the last page is closed
         if (0 == gtk_notebook_get_n_pages(GTK_NOTEBOOK(notebook))) {
@@ -631,7 +589,6 @@ EdsacErrorNotebook *edsac_error_notebook_construct(GType object_type) {
 static void edsac_error_notebook_finalize(GObject *obj) {
     EdsacErrorNotebook *self = EDSAC_ERROR_NOTEBOOK(obj);
 
-//    assert(0 == pthread_mutex_destroy(&self->priv->mutex));
     g_slist_free_full(self->priv->open_tabs_list, (GDestroyNotify) free_linky_buffer);
 
     G_OBJECT_CLASS(edsac_error_notebook_parent_class)->finalize(obj);
@@ -647,7 +604,6 @@ static void edsac_error_notebook_class_init(EdsacErrorNotebookClass *class) {
 static void edsac_error_notebook_instance_init(EdsacErrorNotebook *self) {
     self->priv = EDSAC_ERROR_NOTEBOOK_GET_PRIVATE(self);
 
-//    assert(0 == pthread_mutex_init(&self->priv->mutex, NULL));
     self->priv->open_tabs_list = NULL; // empty slist
 
     Clickable *all_desc = malloc(sizeof(Clickable));

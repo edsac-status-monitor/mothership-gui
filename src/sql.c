@@ -19,8 +19,16 @@
 #include <stdlib.h>
 
 static sqlite3 *db = NULL;
+static bool show_disabled = false;
 
 // functions
+void set_show_disabled(bool new_val) {
+    show_disabled = new_val;
+}
+
+bool get_show_disabled(void) {
+    return show_disabled;
+}
 
 // checks that str is a valid mac address
 static bool check_mac_address(const char* str) {
@@ -327,8 +335,10 @@ static GString *clickable_query(const Clickable *search, const char* fields) {
     g_string_append_printf(query, " %s \
                     FROM errors \
                     INNER JOIN nodes \
-                    ON errors.node_id = nodes.id \
-                    WHERE nodes.enabled = 1 AND errors.enabled = 1 ", fields); 
+                    ON errors.node_id = nodes.id ", fields); 
+    if (!show_disabled) {
+        g_string_append(query, "WHERE nodes.enabled = 1 AND errors.enabled = 1 "); 
+    }
 
     switch(search->type) {
         case ALL:

@@ -56,6 +56,9 @@ static void update_bar(void) {
         g_string_sprintf(msg, "Failure to count errors (something is probably very wrong)");
     }
 
+    if (!get_show_disabled()) {
+        g_string_append(msg, " (disabled items hidden and not counted)");
+    }
 
     gtk_statusbar_pop(bar, 0);
     gtk_statusbar_push(bar, 0, msg->str);
@@ -144,21 +147,23 @@ static void add_node_activate(void) {
     update_nodes_menu();
 }
 
-static void show_disabled_change_state(GSimpleAction *simple) {
+static void hide_disabled_change_state(GSimpleAction *simple) {
     assert(NULL != simple);
-    gboolean show_disabled = g_variant_get_boolean(g_action_get_state(G_ACTION(simple)));
+    gboolean hide_disabled = g_variant_get_boolean(g_action_get_state(G_ACTION(simple)));
 
     puts("In handler");
     // toggle
-    if (show_disabled) {
+    if (hide_disabled) {
         g_simple_action_set_state(simple, g_variant_new_boolean(FALSE));
-        puts("Now Not showing disabled items");
-        gui_update(NULL);
-    } else {
-        g_simple_action_set_state(simple, g_variant_new_boolean(TRUE));
         puts("Now Showing disabled items");
+        set_show_disabled(true);
         gui_update(NULL);
-    }
+   } else {
+        g_simple_action_set_state(simple, g_variant_new_boolean(TRUE));
+        puts("Now hiding disabled items");
+        set_show_disabled(false);
+        gui_update(NULL);
+   }
 }
 
 static void node_toggle_disabled_activate(__attribute__((unused)) GSimpleAction *simple, GVariant *parameter) {
@@ -248,7 +253,7 @@ static void activate(GtkApplication *app, __attribute__((unused)) gpointer data)
     static const GActionEntry actions[] = {
         {"add_node", (action_handler_t) add_node_activate},
         {"quit", (action_handler_t) quit_activate},
-        {"show_disabled", NULL, "b", "true", (action_handler_t) show_disabled_change_state},
+        {"hide_disabled", NULL, "b", "true", (action_handler_t) hide_disabled_change_state},
         {"node_show", (action_handler_t) node_show_activate, "(tt)"},
         {"node_toggle_disabled", (action_handler_t) node_toggle_disabled_activate, "(tt)"},
         {"node_delete", (action_handler_t) node_delete_activate, "(tt)"}
@@ -268,10 +273,10 @@ static void activate(GtkApplication *app, __attribute__((unused)) gpointer data)
     // View menu model
     GMenu *view = g_menu_new();
     assert(NULL != view);
-    GMenuItem *show_disabled = g_menu_item_new("Show Disabled", "app.show_disabled");
-    assert(NULL != show_disabled);
-    g_menu_item_set_action_and_target_value(show_disabled, "app.show_disabled", g_variant_new_boolean(TRUE));
-    g_menu_append_item(view, show_disabled);
+    GMenuItem *hide_disabled = g_menu_item_new("Hide Disabled", "app.hide_disabled");
+    assert(NULL != hide_disabled);
+    g_menu_item_set_action_and_target_value(hide_disabled, "app.hide_disabled", g_variant_new_boolean(TRUE));
+    g_menu_append_item(view, hide_disabled);
     g_menu_freeze(view);
 
     // Nodes menu model
