@@ -44,6 +44,12 @@ bool remove_all_errors(void);
 // returns a GList of SearchResults
 GList *search_clickable(const Clickable *search);
 
+// GList of unsigned int
+GList *list_racks(void);
+
+// GList of chassis numbers
+GList *list_chassis_by_rack(const unsigned int rack_no);
+
 // -1 on error
 int count_clickable(const Clickable *search);
 

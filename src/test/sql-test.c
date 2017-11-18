@@ -97,7 +97,6 @@ static void search_error(const unsigned int rack_no, const unsigned int chassis_
 int main(void) {
     const char* correct_mac = "ff:ff:ff:ff:ff:ff";
     init_database(NULL); // NULL: memory only database
-    assert(true == create_tables());
 
     // invalid mac address
     assert(false == add_node(0, 1, "not a mac address", false, "myconfig"));
@@ -175,7 +174,49 @@ int main(void) {
     // check that node 0, 0's errors were also removed
     assert(0 == count_clickable(&node00_search));
     
+    // we only have one rack: rack 0
+    GList *rack_0 = list_racks();
+    assert(NULL != rack_0);
+    assert(0 == (uintptr_t) rack_0->data);
+    assert(NULL == rack_0->next);
+    assert(NULL == rack_0->prev);
+
+    // add another rack
+    assert(true == add_node(1, 0, correct_mac, true, "blah"));
+    // check the list now
+    GList *rack_01 = list_racks();
+    assert(NULL != rack_01);
+    GList *rack_1 = rack_01->next;
+    assert(NULL != rack_1);
+    assert(NULL == rack_1->next);
+    assert(NULL == rack_01->prev);
+    assert(rack_01 == rack_1->prev);
+    assert(0 == (uintptr_t) rack_01->data);
+    assert(1 == (uintptr_t) (rack_1->data));
+
+    // list nodes by rack 0
+    GList *nodes_rack_0 = list_chassis_by_rack(0);
+    assert(NULL != nodes_rack_0);
+    assert(NULL == nodes_rack_0->prev);
+    assert(NULL != nodes_rack_0->next);
+    assert(NULL == nodes_rack_0->next->next);
+    assert(1 == (uintptr_t) nodes_rack_0->data);
+    assert(2 == (uintptr_t) nodes_rack_0->next->data);
+
+    // list nodes by rack 1
+    GList *nodes_rack_1 = list_chassis_by_rack(1);
+    assert(NULL != nodes_rack_1);
+    assert(NULL == nodes_rack_1->prev);
+    assert(NULL == nodes_rack_1->next);
+    assert(0 == (uintptr_t) nodes_rack_1->data);
+
     assert(true == remove_node(0, 1));
     assert(true == remove_node(0, 2));
+    assert(true == remove_node(1, 0));
+
+    assert(NULL == list_racks());
+    assert(NULL == list_chassis_by_rack(0));
+    assert(NULL == list_chassis_by_rack(1));
+
     close_database();
 }

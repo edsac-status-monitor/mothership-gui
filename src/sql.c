@@ -428,3 +428,70 @@ int count_clickable(const Clickable *search) {
 
     return count;
 }
+
+GList *list_racks(void) {
+    const char* query = "SELECT DISTINCT rack_no FROM nodes;";
+
+    GList *results = NULL; // empty list
+
+    sqlite3_stmt *statement = NULL;
+    if (SQLITE_OK != sqlite3_prepare_v2(db, query, -1, &statement, NULL)) {
+        puts("Error constructing list_racks query");
+        return NULL;
+    }
+
+    int status = SQLITE_ERROR;
+    do {
+        status = sqlite3_step(statement);
+        if (SQLITE_DONE == status) {
+            break;
+        } else if (SQLITE_ROW != status) {
+            assert(SQLITE_OK == sqlite3_finalize(statement));
+            puts("Bad sqlite3_step list_racks");
+            g_list_free(results);
+            return NULL;
+        }
+        // status == SQL_ROW so get data
+        gpointer item = (gpointer) sqlite3_column_int64(statement, 0);
+        results = g_list_append(results, item);
+    } while(true);
+
+    assert(SQLITE_OK == sqlite3_finalize(statement));
+
+    return results;
+}
+
+GList *list_chassis_by_rack(const unsigned int rack_no) {
+    GString* query = g_string_new(NULL);
+    g_string_printf(query, "SELECT DISTINCT chassis_no FROM nodes WHERE rack_no = %i;", rack_no);
+
+    GList *results = NULL; // empty list
+
+    sqlite3_stmt *statement = NULL;
+    if (SQLITE_OK != sqlite3_prepare_v2(db, query->str, -1, &statement, NULL)) {
+        g_string_free(query, TRUE);
+        puts("Error constructing list_racks query");
+        return NULL;
+    }
+    g_string_free(query, TRUE);
+
+    int status = SQLITE_ERROR;
+    do {
+        status = sqlite3_step(statement);
+        if (SQLITE_DONE == status) {
+            break;
+        } else if (SQLITE_ROW != status) {
+            assert(SQLITE_OK == sqlite3_finalize(statement));
+            puts("Bad sqlite3_step list_racks");
+            g_list_free(results);
+            return NULL;
+        }
+        // status == SQL_ROW so get data
+        gpointer item = (gpointer) sqlite3_column_int64(statement, 0);
+        results = g_list_append(results, item);
+    } while(true);
+
+    assert(SQLITE_OK == sqlite3_finalize(statement));
+
+    return results;
+}
