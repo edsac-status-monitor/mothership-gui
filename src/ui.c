@@ -14,6 +14,8 @@
 #include "sql.h"
 #include <edsac_server.h>
 #include <edsac_timer.h>
+#include <unistd.h>
+#include <stdlib.h>
 
 // declarations
 static void activate(GtkApplication *app, gpointer data);
@@ -140,11 +142,216 @@ static void update_nodes_menu(void) {
     g_menu_append_submenu(model, "Nodes", G_MENU_MODEL(generate_nodes_menu()));
 }
 
+static void choose_config_file_callback(__attribute__((unused)) GtkButton *unused, gpointer user_data) {
+    assert(NULL != user_data);
+    GtkTextBuffer *buffer = GTK_TEXT_BUFFER(user_data);
+
+    GtkWidget *dialog = gtk_file_chooser_dialog_new("Choose Configuration File", main_window, 
+        GTK_FILE_CHOOSER_ACTION_OPEN, "Cancel", GTK_RESPONSE_CANCEL,
+        "Open", GTK_RESPONSE_ACCEPT, NULL);
+
+    gint res = gtk_dialog_run(GTK_DIALOG(dialog));
+    if (GTK_RESPONSE_ACCEPT == res) {
+        GtkFileChooser *chooser = GTK_FILE_CHOOSER(dialog);
+        assert(NULL != chooser);
+        gtk_text_buffer_set_text(buffer, gtk_file_chooser_get_filename(chooser), -1);
+    }
+
+    gtk_widget_destroy(dialog);
+}
+
+static char *get_all_text(GtkTextBuffer *buffer) {
+    assert(NULL != buffer);
+
+    GtkTextIter start;
+    gtk_text_buffer_get_start_iter(buffer, &start);
+    GtkTextIter end;
+    gtk_text_buffer_get_end_iter(buffer, &end);
+
+    return gtk_text_buffer_get_text(buffer, &start, &end, FALSE);
+}
+
+static void set_error_text(GtkTextBuffer *buffer) {
+    assert(NULL != buffer);
+
+    GtkTextIter start;
+    gtk_text_buffer_get_start_iter(buffer, &start);
+    GtkTextIter end;
+    gtk_text_buffer_get_end_iter(buffer, &end);
+
+    GtkTextTag *error_text = gtk_text_buffer_create_tag(buffer, NULL, 
+        "underline", PANGO_UNDERLINE_SINGLE, "underline-set", TRUE,
+        "foreground", "red", NULL);
+    assert(NULL != error_text);
+
+    gtk_text_buffer_apply_tag(buffer, error_text, &start, &end);
+}
+
+static bool is_uint(GtkTextBuffer *buffer) {
+    assert(NULL != buffer);
+
+    char *text = get_all_text(buffer);
+
+    bool ret = true;
+    for (char *text_iter = text; *text_iter != '\0'; text_iter++) {
+        ret &= g_ascii_isdigit(*text_iter); // signed would start with '-'
+    }
+
+    g_free(text);
+
+    if (!ret) {
+        set_error_text(buffer);
+    }
+
+    return ret;
+}
+
+static GtkTextBuffer *extract_buffer(GtkGrid *grid, gint left, gint top) {
+    assert(NULL != grid);
+
+    GtkBin *frame = GTK_BIN(gtk_grid_get_child_at(grid, left, top));
+    GtkTextView *view = GTK_TEXT_VIEW(gtk_bin_get_child(frame));
+
+    return gtk_text_view_get_buffer(view);
+}
+
+static void ok_callback(__attribute__((unused)) GtkButton *unused, gpointer user_data) {
+    assert(NULL != user_data);
+    GtkWindow *add_node_window = GTK_WINDOW(user_data);
+    GtkGrid *grid = GTK_GRID(gtk_bin_get_child(GTK_BIN(add_node_window)));
+
+    GtkTextBuffer *rack_no_buffer = extract_buffer(grid, 1, 0);
+    GtkTextBuffer *chassis_no_buffer = extract_buffer(grid, 1, 1);
+    GtkTextBuffer *mac_address_buffer = extract_buffer(grid, 1, 2);
+    GtkTextBuffer *config_file_buffer = extract_buffer(grid, 1, 3);
+
+    bool valid = is_uint(rack_no_buffer);
+    valid &= is_uint(chassis_no_buffer);
+
+    char *mac_addr = get_all_text(mac_address_buffer);
+    assert(NULL != mac_addr);
+
+    if (!check_mac_address(mac_addr)) {
+        set_error_text(mac_address_buffer);
+        valid = false;
+    }
+
+    char *config_path = get_all_text(config_file_buffer);
+    assert(NULL != config_path);
+    if (F_OK != access(config_path, R_OK)) {
+        set_error_text(config_file_buffer);
+        valid = false;
+    }
+
+    if (valid) {
+        char *rack_no_str = get_all_text(rack_no_buffer);
+        assert(NULL!= rack_no_str);
+        char *chassis_no_str = get_all_text(chassis_no_buffer);
+        assert(NULL != chassis_no_str);
+
+        // get rack_no and chassis_no as numbers (safe because we already checked they are numbers)
+        int rack_no = atoi(rack_no_str);
+        int chassis_no = atoi(chassis_no_str);
+
+        // finally actually add the node
+        #pragma GCC diagnostic push
+        #pragma GCC diagnostic ignored "-Wsign-conversion"
+        add_node(rack_no, chassis_no, mac_addr, true, config_path);
+        #pragma GCC diagnostic pop
+        update_nodes_menu();
+
+        // clean up
+        g_free(rack_no_str);
+        g_free(chassis_no_str);
+        g_free(config_path);
+        g_free(mac_addr);
+        g_object_unref(G_OBJECT(config_file_buffer)); // ref'ed in add_node_activate
+
+        gtk_window_close(add_node_window);
+    }
+}
+
+static void clear_text_tags(GtkTextBuffer *buffer) {
+    assert(NULL != buffer);
+
+    GtkTextIter start;
+    gtk_text_buffer_get_start_iter(buffer, &start);
+    GtkTextIter end;
+    gtk_text_buffer_get_end_iter(buffer, &end);
+
+    gtk_text_buffer_remove_all_tags(buffer, &start, &end);
+}
+
+static GtkTextView *new_text_view(GtkGrid *grid, gint left, gint top) {
+    assert(NULL != grid);
+
+    GtkWidget *text = gtk_text_view_new();
+    assert(NULL != text);
+    gtk_text_view_set_accepts_tab(GTK_TEXT_VIEW(text), FALSE);
+    GtkTextBuffer *buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(text));
+    g_object_ref(G_OBJECT(buffer));
+    g_signal_connect_swapped(G_OBJECT(text), "grab-focus", G_CALLBACK(clear_text_tags), buffer);
+    GtkWidget *frame = gtk_frame_new(NULL);
+    assert(NULL != frame);
+    gtk_container_add(GTK_CONTAINER(frame), text);
+    gtk_grid_attach(grid, frame, left, top, 1, 1);
+
+    return GTK_TEXT_VIEW(text);
+}
+
 // handles the add_node action
 static void add_node_activate(void) {
     puts("Add node");
 
-    update_nodes_menu();
+    GtkWindow *add_node_window = GTK_WINDOW(gtk_window_new(GTK_WINDOW_TOPLEVEL));
+    assert(NULL != add_node_window);
+//    gtk_window_set_decorated(add_node_window, FALSE);
+    gtk_window_set_modal(add_node_window, TRUE);
+    gtk_window_set_transient_for(add_node_window, main_window);
+    gtk_window_set_title(add_node_window, "Add Node");
+    gtk_container_set_border_width(GTK_CONTAINER(add_node_window), 10);
+
+    GtkGrid *grid = GTK_GRID(gtk_grid_new());
+    gtk_grid_set_column_spacing(grid, 5);
+    gtk_grid_set_row_spacing(grid, 5);
+    gtk_grid_set_row_homogeneous(grid, TRUE);
+    gtk_grid_set_column_homogeneous(grid, TRUE);
+    assert(NULL != grid);
+
+    GtkWidget *rack_no_label = gtk_label_new("Rack Number");
+    assert(NULL != rack_no_label);
+    gtk_grid_attach(grid, rack_no_label, 0, 0, 1, 1);
+
+    new_text_view(grid, 1, 0);
+
+    GtkWidget *chassis_no_label = gtk_label_new("Chassis Number");
+    assert(NULL != chassis_no_label);
+    gtk_grid_attach(grid, chassis_no_label, 0, 1, 1, 1);
+
+    new_text_view(grid, 1, 1);
+
+    GtkWidget *mac_address_label = gtk_label_new("Mac Address");
+    assert(NULL != mac_address_label);
+    gtk_grid_attach(grid, mac_address_label, 0, 2, 1, 1);
+
+    new_text_view(grid, 1, 2);
+
+    GtkTextView *config_path_text = new_text_view(grid, 1, 3);
+
+    GtkWidget *config_path_button = gtk_button_new_with_label("Choose config file");
+    assert(NULL != config_path_button);
+    gtk_grid_attach(grid, config_path_button, 0, 3, 1, 1);
+    GtkTextBuffer *buffer = gtk_text_view_get_buffer(config_path_text);
+    g_object_ref(G_OBJECT(buffer));
+    g_signal_connect(config_path_button, "pressed", G_CALLBACK(choose_config_file_callback), buffer);
+
+    GtkWidget *ok_button = gtk_button_new_with_label("Ok");
+    assert(NULL != ok_button);
+    gtk_grid_attach(grid, ok_button, 1, 4, 1, 1);
+    g_signal_connect(ok_button, "pressed", G_CALLBACK(ok_callback), add_node_window);
+
+    gtk_container_add(GTK_CONTAINER(add_node_window), GTK_WIDGET(grid));
+    gtk_widget_show_all(GTK_WIDGET(add_node_window));
 }
 
 static void hide_disabled_change_state(GSimpleAction *simple) {
@@ -265,6 +472,8 @@ static void activate(GtkApplication *app, __attribute__((unused)) gpointer data)
     GMenu *file = g_menu_new();
     assert(NULL != file);
     g_menu_append(file, "Add Node", "app.add_node");
+    const char *add_accels[] = {"<Control>N", NULL};
+    gtk_application_set_accels_for_action(app, "app.add_node", add_accels);
     g_menu_append(file, "Quit", "app.quit");
     const char *quit_accels[] = {"<Control>Q", NULL};
     gtk_application_set_accels_for_action(app, "app.quit", quit_accels);

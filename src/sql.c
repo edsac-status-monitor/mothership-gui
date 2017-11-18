@@ -31,7 +31,7 @@ bool get_show_disabled(void) {
 }
 
 // checks that str is a valid mac address
-static bool check_mac_address(const char* str) {
+bool check_mac_address(const char* str) {
     if (NULL == str) {
         return false;
     }

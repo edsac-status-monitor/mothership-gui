@@ -27,6 +27,8 @@ typedef struct {
 } SearchResult;
 
 // declarations
+bool check_mac_address(const char* str);
+
 void free_search_result(gpointer res);
 
 void init_database(const char* path);
