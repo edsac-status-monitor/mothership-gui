@@ -64,7 +64,9 @@ static void update_bar(void) {
 
 // called when gtk gets around to updating the gui
 void gui_update(gpointer g_idle_id) {
-    assert(TRUE == g_idle_remove_by_data(g_idle_id));
+    if (NULL != g_idle_id) {
+        assert(TRUE == g_idle_remove_by_data(g_idle_id));
+    }
     edsac_error_notebook_update(notebook);
     update_bar();
 }
@@ -96,10 +98,26 @@ static GMenu *generate_nodes_menu(void) {
             snprintf(chassis_label, 15, "Chassis %li", chassis_no);
             printf("%s\n", chassis_label);
 
-            GMenuItem *node = g_menu_item_new(chassis_label, "app.node_prototype");
+            GMenu *node = g_menu_new();
             assert(NULL != node);
-            g_menu_item_set_action_and_target_value(node, "app.node_prototype", g_variant_new("(tt)", rack_no, chassis_no));
-            g_menu_append_item(rack, node);
+            
+            GMenuItem *show = g_menu_item_new("Show", "app.node_show");
+            assert(NULL != show);
+            g_menu_item_set_action_and_target_value(show, "app.node_show", g_variant_new("(tt)", rack_no, chassis_no));
+            g_menu_append_item(node, show);
+
+            GMenuItem *disable = g_menu_item_new("Toggle Disabled", "app.node_toggle_disabled");
+            assert(NULL != disable);
+            g_menu_item_set_action_and_target_value(disable, "app.node_toggle_disabled", g_variant_new("(tt)", rack_no, chassis_no));
+            g_menu_append_item(node, disable);
+
+            GMenuItem *delete = g_menu_item_new("Delete", "app.node_delete");
+            assert(NULL != delete);
+            g_menu_item_set_action_and_target_value(delete, "app.node_delete", g_variant_new("(tt)", rack_no, chassis_no));
+            g_menu_append_item(node, delete);
+
+            g_menu_freeze(node);
+            g_menu_append_submenu(rack, chassis_label, G_MENU_MODEL(node));
 
             chassis = chassis->next;
         }
@@ -135,15 +153,15 @@ static void show_disabled_change_state(GSimpleAction *simple) {
     if (show_disabled) {
         g_simple_action_set_state(simple, g_variant_new_boolean(FALSE));
         puts("Now Not showing disabled items");
-        update_nodes_menu();
+        gui_update(NULL);
     } else {
         g_simple_action_set_state(simple, g_variant_new_boolean(TRUE));
         puts("Now Showing disabled items");
-        update_nodes_menu();
+        gui_update(NULL);
     }
 }
 
-static void node_prototype_activate(__attribute__((unused)) GSimpleAction *simple, GVariant *parameter) {
+static void node_toggle_disabled_activate(__attribute__((unused)) GSimpleAction *simple, GVariant *parameter) {
     assert(NULL != parameter);
 
     GVariant *rack_variant = g_variant_get_child_value(parameter, 0);
@@ -154,9 +172,58 @@ static void node_prototype_activate(__attribute__((unused)) GSimpleAction *simpl
 
     g_variant_unref(rack_variant);
     g_variant_unref(chassis_variant);
+
+    assert(true == node_toggle_disabled(rack_no, chassis_no));
     
-    printf("Node %li %li clicked\n", rack_no, chassis_no);
+    printf("Node %li %li toggled\n", rack_no, chassis_no);
+
+    gui_update(NULL);
 }
+
+static void node_delete_activate(__attribute__((unused)) GSimpleAction *simple, GVariant *parameter) {
+    assert(NULL != parameter);
+
+    GVariant *rack_variant = g_variant_get_child_value(parameter, 0);
+    GVariant *chassis_variant = g_variant_get_child_value(parameter, 1);
+
+    uint64_t rack_no = g_variant_get_uint64(rack_variant);
+    uint64_t chassis_no = g_variant_get_uint64(chassis_variant);
+
+    g_variant_unref(rack_variant);
+    g_variant_unref(chassis_variant);
+
+    #pragma GCC diagnostic push
+    #pragma GCC diagnostic ignored "-Wconversion"
+    assert(true == remove_node(rack_no, chassis_no));
+    #pragma GCC diagnostic pop
+
+    printf("Node %li %li removed\n", rack_no, chassis_no);
+
+    gui_update(NULL);
+}
+
+static void node_show_activate(__attribute__((unused)) GSimpleAction *simple, GVariant *parameter) {
+    assert(NULL != parameter);
+
+    GVariant *rack_variant = g_variant_get_child_value(parameter, 0);
+    GVariant *chassis_variant = g_variant_get_child_value(parameter, 1);
+
+    uint64_t rack_no = g_variant_get_uint64(rack_variant);
+    uint64_t chassis_no = g_variant_get_uint64(chassis_variant);
+
+    g_variant_unref(rack_variant);
+    g_variant_unref(chassis_variant);
+
+    Clickable search;
+    search.type = CHASSIS;
+    #pragma GCC diagnostic push
+    #pragma GCC diagnostic ignored "-Wconversion"
+    search.rack_num = rack_no;
+    search.chassis_num = chassis_no;
+    #pragma GCC diagnostic pop
+
+    edsac_error_notebook_show_page(notebook, &search);
+}   
 
 typedef void (*action_handler_t)(GSimpleAction *simple, GVariant *parameter, gpointer user_data);
 
@@ -182,7 +249,9 @@ static void activate(GtkApplication *app, __attribute__((unused)) gpointer data)
         {"add_node", (action_handler_t) add_node_activate},
         {"quit", (action_handler_t) quit_activate},
         {"show_disabled", NULL, "b", "true", (action_handler_t) show_disabled_change_state},
-        {"node_prototype", (action_handler_t) node_prototype_activate, "(tt)"}
+        {"node_show", (action_handler_t) node_show_activate, "(tt)"},
+        {"node_toggle_disabled", (action_handler_t) node_toggle_disabled_activate, "(tt)"},
+        {"node_delete", (action_handler_t) node_delete_activate, "(tt)"}
     };
     #pragma GCC diagnostic pop
     g_action_map_add_action_entries(G_ACTION_MAP(app), actions, G_N_ELEMENTS(actions), NULL);

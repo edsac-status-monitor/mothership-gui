@@ -495,3 +495,51 @@ GList *list_chassis_by_rack(const uintptr_t rack_no) {
 
     return results;
 }
+
+bool node_toggle_disabled(const unsigned long int rack_no, const unsigned long int chassis_no) {
+    assert(SQLITE_OK == sqlite3_exec(db, "begin transaction;", NULL, NULL, NULL));
+
+    // get the current state of the node
+    GString *query = g_string_new(NULL);
+    g_string_sprintf(query, "SELECT enabled FROM nodes WHERE rack_no=%li AND chassis_no=%li;", rack_no, chassis_no);
+
+    sqlite3_stmt *statement = NULL;
+    if (SQLITE_OK != sqlite3_prepare_v2(db, query->str, -1, &statement, NULL)) {
+        g_string_free(query, TRUE);
+        assert(SQLITE_OK == sqlite3_exec(db, "commit;", NULL, NULL, NULL));
+        return false;
+    }
+    g_string_free(query, TRUE);
+
+    int enabled = -1;
+    int status = SQLITE_ERROR;
+    do {
+        status = sqlite3_step(statement);
+        if (SQLITE_DONE == status) {
+            break;
+        } else if (SQLITE_ROW != status) {
+            assert(SQLITE_OK == sqlite3_finalize(statement));
+            puts("Bad sqlite step toggle_node_disabled");
+            assert(SQLITE_OK == sqlite3_exec(db, "commit;", NULL, NULL, NULL));
+            return false;
+        }
+        // status == SQL_ROW
+        enabled = sqlite3_column_int(statement, 0);
+    } while(true);
+    assert(SQLITE_OK == sqlite3_finalize(statement));
+
+    if (-1 == enabled) {
+        puts("Node not found!");
+        assert(SQLITE_OK == sqlite3_exec(db, "commit;", NULL, NULL, NULL));
+        return false;
+    }
+
+    // update the node
+    GString *update = g_string_new(NULL);
+    g_string_sprintf(update, "UPDATE nodes SET enabled = %i WHERE rack_no = %li AND chassis_no = %li;", 1 - enabled, rack_no, chassis_no);
+    assert(SQLITE_OK == sqlite3_exec(db, update->str, NULL, NULL, NULL));
+    g_string_free(update, TRUE);
+
+    assert(SQLITE_OK == sqlite3_exec(db, "commit;", NULL, NULL, NULL));
+    return true;
+}

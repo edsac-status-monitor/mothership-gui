@@ -50,6 +50,8 @@ GList *list_racks(void);
 // GList of chassis numbers
 GList *list_chassis_by_rack(const uintptr_t rack_no);
 
+bool node_toggle_disabled(const unsigned long int rack_no, const unsigned long int chassis_no);
+
 // -1 on error
 int count_clickable(const Clickable *search);
 
