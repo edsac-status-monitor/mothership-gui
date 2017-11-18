@@ -461,9 +461,9 @@ GList *list_racks(void) {
     return results;
 }
 
-GList *list_chassis_by_rack(const unsigned int rack_no) {
+GList *list_chassis_by_rack(const uintptr_t rack_no) {
     GString* query = g_string_new(NULL);
-    g_string_printf(query, "SELECT DISTINCT chassis_no FROM nodes WHERE rack_no = %i;", rack_no);
+    g_string_printf(query, "SELECT DISTINCT chassis_no FROM nodes WHERE rack_no = %li;", rack_no);
 
     GList *results = NULL; // empty list
 

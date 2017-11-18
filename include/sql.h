@@ -48,7 +48,7 @@ GList *search_clickable(const Clickable *search);
 GList *list_racks(void);
 
 // GList of chassis numbers
-GList *list_chassis_by_rack(const unsigned int rack_no);
+GList *list_chassis_by_rack(const uintptr_t rack_no);
 
 // -1 on error
 int count_clickable(const Clickable *search);
