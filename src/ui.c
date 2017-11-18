@@ -95,6 +95,38 @@ static void show_disabled_change_state(GSimpleAction *simple) {
     }
 }
 
+static void node_prototype_activate(__attribute__((unused)) GSimpleAction *simple, GVariant *parameter) {
+    printf("Node %i clicked\n", g_variant_get_int32(parameter));
+}
+
+static GMenu *update_nodes(void) {
+    static int32_t call_count = 10;
+    call_count += 1;
+
+    GMenu *nodes = g_menu_new();
+    assert(NULL != nodes);
+
+
+    GMenuItem *node_1 = g_menu_item_new("Node 1", "app.node_prototype");
+    assert(NULL != node_1);
+    g_menu_item_set_action_and_target_value(node_1, "app.node_prototype", g_variant_new_int32(1));
+    g_menu_append_item(nodes, node_1);
+
+    GMenuItem *node_2 = g_menu_item_new("Node 2", "app.node_prototype");
+    assert(NULL != node_2);
+    g_menu_item_set_action_and_target_value(node_2, "app.node_prototype", g_variant_new_int32(2));
+    g_menu_append_item(nodes, node_2);
+
+    GMenuItem *node_n = g_menu_item_new("Node n", "app.node_prototype");
+    assert(NULL != node_n);
+    g_menu_item_set_action_and_target_value(node_n, "app.node_prototype", g_variant_new_int32(call_count));
+    g_menu_append_item(nodes, node_n);
+
+    g_menu_freeze(nodes);
+
+    return nodes;
+}
+
 typedef void (*action_handler_t)(GSimpleAction *simple, GVariant *parameter, gpointer user_data);
 
 // activate handler for the application
@@ -118,7 +150,8 @@ static void activate(GtkApplication *app, __attribute__((unused)) gpointer data)
     static const GActionEntry actions[] = {
         {"add_node", (action_handler_t) add_node_activate},
         {"quit", (action_handler_t) quit_activate},
-        {"show_disabled", NULL, "b", "true", (action_handler_t) show_disabled_change_state}
+        {"show_disabled", NULL, "b", "true", (action_handler_t) show_disabled_change_state},
+        {"node_prototype", (action_handler_t) node_prototype_activate, "i"}
     };
     #pragma GCC diagnostic pop
     g_action_map_add_action_entries(G_ACTION_MAP(app), actions, G_N_ELEMENTS(actions), NULL);
@@ -139,19 +172,28 @@ static void activate(GtkApplication *app, __attribute__((unused)) gpointer data)
     assert(NULL != show_disabled);
     g_menu_item_set_action_and_target_value(show_disabled, "app.show_disabled", g_variant_new_boolean(TRUE));
     g_menu_append_item(view, show_disabled);
-    //g_menu_freeze(view);
+    g_menu_freeze(view);
 
+    // Nodes menu model
+    GMenu *nodes = update_nodes();
+    
     // Menu bar model
     GMenu *model = g_menu_new();
     assert(NULL != model);
     g_menu_append_submenu(model, "File", G_MENU_MODEL(file));
     g_menu_append_submenu(model, "View", G_MENU_MODEL(view));
-    //g_menu_freeze(model);
+    g_menu_append_submenu(model, "Nodes", G_MENU_MODEL(nodes));
+    g_menu_freeze(model);
 
     // Menu bar widget
     GtkWidget *menu = gtk_menu_bar_new_from_model(G_MENU_MODEL(model));
     assert(NULL != menu);
     gtk_box_pack_start(box, menu, FALSE, FALSE, 0);
+
+    // test updating nodes
+    g_menu_remove(model, 2);
+    g_menu_append_submenu(model, "Nodes", G_MENU_MODEL(update_nodes()));
+    g_menu_append_submenu(model, "Nodes", G_MENU_MODEL(update_nodes()));
 
     // make notebook
     notebook = edsac_error_notebook_new();
