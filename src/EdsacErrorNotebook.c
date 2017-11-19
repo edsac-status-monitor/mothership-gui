@@ -45,7 +45,7 @@ static gint open_tabs_list_compare_by_desc(gconstpointer a, gconstpointer b);
 static void open_tabs_list_dec_id(gpointer data, gpointer unused);
 static gint open_tabs_list_search_by_id(gconstpointer result, gconstpointer id);
 static LinkyBuffer *new_linky_buffer(Clickable *description);
-static void append_linky_text_buffer(LinkyBuffer *linky_buffer, const unsigned int rack_no, const unsigned int chassis_no, const int valve_no, const char* msg);
+static void append_linky_text_buffer(LinkyBuffer *linky_buffer, SearchResult *data);
 static void free_g_string(gpointer g_string);
 static void free_linky_buffer(LinkyBuffer *linky_buffer);
 static void add_link(size_t start_pos, size_t end_pos, GtkTextBuffer *buffer, Clickable* data);
@@ -300,7 +300,7 @@ static LinkyBuffer *new_linky_buffer(Clickable *desc) {
 // appends the specified error message to the linky buffer
 // negative valve_no to not specify it
 // assumes that linky_buffer is already locked
-static void append_linky_text_buffer(LinkyBuffer *linky_buffer, const unsigned int rack_no, const unsigned int chassis_no, const int valve_no, const char* msg) {
+static void append_linky_text_buffer(LinkyBuffer *linky_buffer, SearchResult *data) {
     // generate message string
     GString *message = g_string_new(NULL);
     assert(NULL != message);
@@ -310,21 +310,21 @@ static void append_linky_text_buffer(LinkyBuffer *linky_buffer, const unsigned i
     gtk_text_buffer_get_end_iter(linky_buffer->buffer, &buffer_end);
     const gsize offset = (gsize) gtk_text_iter_get_offset(&buffer_end);
 
-    g_string_printf(message, "Rack: %i, ", rack_no);
+    g_string_printf(message, "Rack: %i, ", data->rack_no);
     const gsize rack_start = offset;
     const gsize rack_end = offset + message->len - 2; // comma, space 
     const gsize chassis_start = offset + message->len; 
 
-    g_string_append_printf(message, "Chassis: %i, ", chassis_no);
+    g_string_append_printf(message, "Chassis: %i, ", data->chassis_no);
     const gsize chassis_end = offset + message->len - 2; // comma, space 
     const gsize valve_start = offset + message->len; 
 
-    if (valve_no >= 0) {
-        g_string_append_printf(message, "Valve: %i: ", valve_no);
+    if (data->valve_no >= 0) {
+        g_string_append_printf(message, "Valve: %i: ", data->valve_no);
     }
     const gsize valve_end = offset + message->len - 2; // colon, space. (this is unused when valve_no < 0 so it remains valid)
     
-    g_string_append_printf(message, "%s\n", msg);
+    g_string_append_printf(message, "%s\n", data->message);
     
     gtk_text_buffer_insert(linky_buffer->buffer, &buffer_end, message->str, (gint) message->len);
 
@@ -332,35 +332,46 @@ static void append_linky_text_buffer(LinkyBuffer *linky_buffer, const unsigned i
     Clickable *rack_data = malloc(sizeof(Clickable));
     assert(NULL != rack_data);
     rack_data->type = RACK;
-    rack_data->rack_num = rack_no;
+    rack_data->rack_num = data->rack_no;
 
     Clickable *chassis_data = malloc(sizeof(Clickable));
     assert(NULL != chassis_data);
     chassis_data->type = CHASSIS;
-    chassis_data->rack_num = rack_no;
-    chassis_data->chassis_num = chassis_no;
+    chassis_data->rack_num = data->rack_no;
+    chassis_data->chassis_num = data->chassis_no;
 
     Clickable *valve_data = NULL;
-    if (valve_no >= 0) {
+    if (data->valve_no >= 0) {
         valve_data = malloc(sizeof(Clickable));
         assert(NULL != valve_data);
         valve_data->type = VALVE;
-        valve_data->rack_num = rack_no;
-        valve_data->chassis_num = chassis_no;
-        valve_data->valve_num = valve_no; 
+        valve_data->rack_num = data->rack_no;
+        valve_data->chassis_num = data->chassis_no;
+        valve_data->valve_num = data->valve_no; 
     }
 
     // so we know to free them
     linky_buffer->clickables = g_slist_prepend(linky_buffer->clickables, rack_data);
     linky_buffer->clickables = g_slist_prepend(linky_buffer->clickables, chassis_data);
-
-    if (valve_no >= 0) {
+    if (data->valve_no >= 0) {
         linky_buffer->clickables = g_slist_prepend(linky_buffer->clickables, valve_data);
+    }
+
+    // grey out disabled items
+    if (!data->enabled) {
+        GtkTextIter start;
+        GtkTextIter end;
+        gtk_text_buffer_get_iter_at_offset(linky_buffer->buffer, &start, (gint) valve_end);
+        gtk_text_buffer_get_end_iter(linky_buffer->buffer, &end);
+
+        GtkTextTag *disabled = gtk_text_buffer_create_tag(linky_buffer->buffer, NULL,
+            "foreground", "grey", NULL);
+        gtk_text_buffer_apply_tag(linky_buffer->buffer, disabled, &start, &end);
     }
 
     add_link(rack_start, rack_end, linky_buffer->buffer, rack_data);
     add_link(chassis_start, chassis_end, linky_buffer->buffer, chassis_data);
-    if (valve_no >= 0) {
+    if (data->valve_no >= 0) {
         add_link(valve_start, valve_end, linky_buffer->buffer, valve_data);
     }
 }
@@ -408,7 +419,7 @@ static void insert_search_result(gpointer data, gpointer user_data) {
     SearchResult *res = (SearchResult *) data;
     LinkyBuffer *linky_buffer = (LinkyBuffer *) user_data;
 
-    append_linky_text_buffer(linky_buffer, res->rack_no, res->chassis_no, res->valve_no, res->message);
+    append_linky_text_buffer(linky_buffer, res);
 }
 
 static void update_tab(gpointer data, __attribute__((unused)) gpointer unused) {
