@@ -222,7 +222,7 @@ bool remove_all_errors(void) {
     return ret;
 }
 
-static bool add_error_decoded(const uint32_t rack_no, const uint32_t chassis_no, const int valve_no, const time_t recv_time, const char *msg) {
+bool add_error_decoded(const uint32_t rack_no, const uint32_t chassis_no, const int valve_no, const time_t recv_time, const char *msg) {
     GString *query = g_string_new(NULL);
     assert(NULL != query);
 
@@ -248,41 +248,42 @@ static bool add_error_decoded(const uint32_t rack_no, const uint32_t chassis_no,
     return ret;
 }
 
+NodeIdentifier *parse_ip_address(const struct in_addr *address) {
+    assert(NULL != address);
+
+    NodeIdentifier *ret = malloc(sizeof(NodeIdentifier));
+    assert(NULL != ret);
+
+    // "Network" is big endian. We don't know what the host is
+    uint32_t addr = htonl(address->s_addr);
+    const uint32_t rack_num_n = (addr & 0x0000FF00) << 16;
+    const uint32_t chassis_num_n = (addr & 0x000000FF) << 24;
+
+    // don't assume host endianness
+    ret->rack_no = ntohl(rack_num_n);
+    ret->chassis_no = ntohl(chassis_num_n);
+
+    return ret;
+}
+
 bool add_error(const BufferItem *error) {
     if (NULL == error) {
         return false;
     }
 
-    // "Network" is big endian. We don't know what the host is
-    uint32_t addr = htonl(error->address.s_addr);
-    const uint32_t rack_num_n = (addr & 0x0000FF00) << 16;
-    const uint32_t chassis_num_n = (addr & 0x000000FF) << 24;
-
-    // don't assume host endianness
-    const uint32_t rack_num = ntohl(rack_num_n);
-    const uint32_t chassis_num = ntohl(chassis_num_n);
-
+    NodeIdentifier *node = parse_ip_address(&error->address);
+    
     bool ret = false;
 
-    struct tm *time = localtime(&error->recv_time);
-    assert(NULL != time);
-    char *time_str = asctime(time);
-    time = NULL;
-    g_free(time);
-    assert(NULL != time_str);
-
-    GString *error_msg = g_string_new(time_str);
+    GString *error_msg = g_string_new(NULL);
     assert(NULL != error_msg);
-
-    // remove the year and newline from the time string
-    g_string_truncate(error_msg, error_msg->len - 5);
 
     switch (error->msg.type) {
         case HARD_ERROR_VALVE:
             g_string_append_printf(error_msg, "Hardware Error: %s", 
                 error->msg.data.hardware_valve.message->str);
 
-            ret = add_error_decoded(rack_num, chassis_num, 
+            ret = add_error_decoded(node->rack_no, node->chassis_no, 
                 error->msg.data.hardware_valve.valve_no,
                 error->recv_time, error_msg->str);
             break;
@@ -291,7 +292,7 @@ bool add_error(const BufferItem *error) {
             g_string_append_printf(error_msg, "Hardware Error: %s",
                 error->msg.data.hardware_other.message->str);
 
-            ret = add_error_decoded(rack_num, chassis_num, -1, 
+            ret = add_error_decoded(node->rack_no, node->chassis_no, -1, 
                 error->recv_time, error_msg->str);
             break;
 
@@ -299,7 +300,7 @@ bool add_error(const BufferItem *error) {
             g_string_append_printf(error_msg, "Software Error: %s",
                 error->msg.data.software.message->str);
 
-            ret = add_error_decoded(rack_num, chassis_num, -1,
+            ret = add_error_decoded(node->rack_no, node->chassis_no, -1,
                 error->recv_time, error_msg->str);
             break;
 
@@ -309,6 +310,7 @@ bool add_error(const BufferItem *error) {
             break;
     }
 
+    g_free(node);
     g_string_free(error_msg, TRUE);
     return ret;
 }
@@ -362,7 +364,7 @@ static GString *clickable_query(const Clickable *search, const char* fields) {
 }
 
 GList *search_clickable(const Clickable *search) {
-    GString *query = clickable_query(search, "errors.description, nodes.rack_no, nodes.chassis_no, errors.valve_no");
+    GString *query = clickable_query(search, "errors.recv_time, errors.description, nodes.rack_no, nodes.chassis_no, errors.valve_no");
     if (NULL == query) {
         return NULL;
     }
@@ -392,18 +394,32 @@ GList *search_clickable(const Clickable *search) {
         SearchResult *res = malloc(sizeof(SearchResult));
         assert(NULL != res);
 
+        time_t recv_time = sqlite3_column_int64(statement, 0);
+        struct tm *time = localtime(&recv_time);
+        assert(NULL != time);
+        char *time_str = asctime(time);
+        assert(NULL != time_str);
+
+        GString *msg = g_string_new(time_str);
+        assert(NULL != msg);
+        //g_free(time_str);
+
+        // remove the year and newline from the time string
+        g_string_truncate(msg, msg->len - 5);
+
         #pragma GCC diagnostic push
         #pragma GCC diagnostic ignored "-Wpointer-sign"
-        res->message = strdup(sqlite3_column_text(statement, 0));
+        g_string_append(msg, sqlite3_column_text(statement, 1));
         #pragma GCC diagnostic pop
-        assert(NULL != res->message);
+        res->message = msg->str;
+        g_string_free(msg, FALSE);
 
         #pragma GCC diagnostic push
         #pragma GCC diagnostic ignored "-Wsign-conversion"
-        res->rack_no = sqlite3_column_int(statement, 1);
-        res->chassis_no = sqlite3_column_int(statement, 2);
+        res->rack_no = sqlite3_column_int(statement, 2);
+        res->chassis_no = sqlite3_column_int(statement, 3);
         #pragma GCC diagnostic pop
-        res->valve_no = sqlite3_column_int(statement, 3);
+        res->valve_no = sqlite3_column_int(statement, 4);
 
         results = g_list_append(results, res);
     } while (true);
@@ -499,6 +515,46 @@ GList *list_chassis_by_rack(const uintptr_t rack_no) {
         // status == SQL_ROW so get data
         gpointer item = (gpointer) sqlite3_column_int64(statement, 0);
         results = g_list_append(results, item);
+    } while(true);
+
+    assert(SQLITE_OK == sqlite3_finalize(statement));
+
+    return results;
+}
+
+GSList *list_nodes(void) {
+    const char *query = "SELECT rack_no, chassis_no FROM nodes;";
+
+    GSList *results = NULL;
+
+    sqlite3_stmt *statement = NULL;
+    if (SQLITE_OK != sqlite3_prepare_v2(db, query, 39, &statement, NULL)) {
+        puts("Error constructing list_nodes query");
+        return NULL;
+    }
+
+    int status = SQLITE_ERROR;
+    do {
+        status = sqlite3_step(statement);
+        if (SQLITE_DONE == status) {
+            break;
+        } else if (SQLITE_ROW != status) {
+            assert(SQLITE_OK == sqlite3_finalize(statement));
+            puts("Bad sqlite3_step list_nodes");
+            return NULL;
+        }
+        // status == SQL_ROW so get data
+
+        NodeIdentifier *list_item = malloc(sizeof(NodeIdentifier));
+        assert(NULL != list_item);
+        
+        #pragma GCC diagnostic push
+        #pragma GCC diagnostic ignored "-Wsign-conversion"
+        list_item->rack_no = sqlite3_column_int(statement, 0);
+        list_item->chassis_no = sqlite3_column_int(statement, 1);
+        #pragma GCC diagnostic pop
+
+        results = g_slist_prepend(results, list_item); 
     } while(true);
 
     assert(SQLITE_OK == sqlite3_finalize(statement));

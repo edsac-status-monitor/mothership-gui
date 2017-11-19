@@ -26,6 +26,11 @@ typedef struct {
     int valve_no;
 } SearchResult;
 
+typedef struct {
+    unsigned int rack_no;
+    unsigned int chassis_no;
+} NodeIdentifier;
+
 // declarations
 bool check_mac_address(const char* str);
 
@@ -33,6 +38,9 @@ void free_search_result(gpointer res);
 
 void init_database(const char* path);
 void close_database(void);
+
+// get the fields we want out of the IP v4 address (xxx.xxx.rack_no.chassis_no)
+NodeIdentifier *parse_ip_address(const struct in_addr *address);
 
 // false on error
 bool create_tables(void);
@@ -45,6 +53,7 @@ bool add_node(const unsigned int rack_no, const unsigned int chassis_no, const c
 bool remove_node(const unsigned int rack_no, const unsigned int chassis_no);
 
 bool add_error(const BufferItem *error);
+bool add_error_decoded(const uint32_t rack_no, const uint32_t chassis_no, const int valve_no, const time_t recv_time, const char *msg);
 bool remove_all_errors(void);
 
 // returns a GList of SearchResults
@@ -55,6 +64,9 @@ GList *list_racks(void);
 
 // GList of chassis numbers
 GList *list_chassis_by_rack(const uintptr_t rack_no);
+
+// GList of NodeIdentifiers
+GSList *list_nodes(void);
 
 bool node_toggle_disabled(const unsigned long int rack_no, const unsigned long int chassis_no);
 

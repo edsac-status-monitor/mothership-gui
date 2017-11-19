@@ -16,6 +16,7 @@
 #include <edsac_timer.h>
 #include <unistd.h>
 #include <stdlib.h>
+#include <time.h>
 
 // declarations
 static void activate(GtkApplication *app, gpointer data);
@@ -92,7 +93,6 @@ static GMenu *generate_nodes_menu(void) {
         const uintptr_t rack_no = (uintptr_t) racks->data;
         char rack_label[10];
         snprintf(rack_label, 10, "Rack %li", rack_no);
-        printf("%s\n", rack_label);
 
         GMenu *rack = g_menu_new();
 
@@ -101,7 +101,6 @@ static GMenu *generate_nodes_menu(void) {
             const uintptr_t chassis_no = (uintptr_t) chassis->data;
             char chassis_label[15];
             snprintf(chassis_label, 15, "Chassis %li", chassis_no);
-            printf("%s\n", chassis_label);
 
             GMenu *node = g_menu_new();
             assert(NULL != node);
@@ -437,6 +436,63 @@ static void node_show_activate(__attribute__((unused)) GSimpleAction *simple, GV
     edsac_error_notebook_show_page(notebook, &search);
 }   
 
+static void convert_to_nodeidentifiers(gpointer data, gpointer user_data) {
+    assert(NULL != data);
+    assert(NULL != user_data);
+
+    struct sockaddr_in *addr_struct = data;
+    GSList **list = user_data;
+
+    NodeIdentifier *list_data = parse_ip_address(&addr_struct->sin_addr);
+    assert(NULL != list_data);
+
+    *list = g_slist_prepend(*list, list_data);
+}
+
+static gint compare_nodeids(gconstpointer a, gconstpointer b) {
+    assert(NULL != a);
+    assert(NULL != b);
+
+    const NodeIdentifier *A = a;
+    const NodeIdentifier *B = b;
+
+    if ((A->chassis_no == B->chassis_no) && (A->rack_no == B->rack_no)) {
+        return 0;
+    } else {
+        return 1;
+    }
+}
+
+static void complain_missing_nodes(gpointer data, gpointer user_data) {
+    assert(NULL != data);
+
+    NodeIdentifier *db_id = data;
+    GSList *server_nodes = user_data;
+
+    GSList *res = g_slist_find_custom(server_nodes, data, compare_nodeids);
+    if (NULL == res) {
+        // not found so make an error about it
+        assert(true == add_error_decoded(db_id->rack_no, db_id->chassis_no, -1, time(NULL), "Node not connected"));
+    }
+}
+
+static void check_connected_activate(void) {
+    GSList *ip_addr_structs = get_connected_list();
+
+    // convert to NodeIdentifiers
+    GSList *ip_addrs_server = NULL;
+    g_slist_foreach(ip_addr_structs, convert_to_nodeidentifiers, &ip_addrs_server);
+    g_slist_free_full(ip_addr_structs, g_free);
+
+    GSList *ip_addrs_db = list_nodes();    
+    g_slist_foreach(ip_addrs_db, complain_missing_nodes, ip_addrs_server);
+
+    g_slist_free_full(ip_addrs_server, g_free);
+    g_slist_free_full(ip_addrs_db, g_free);
+
+    gui_update(NULL);
+}
+
 typedef void (*action_handler_t)(GSimpleAction *simple, GVariant *parameter, gpointer user_data);
 
 // activate handler for the application
@@ -460,6 +516,7 @@ static void activate(GtkApplication *app, __attribute__((unused)) gpointer data)
     static const GActionEntry actions[] = {
         {"add_node", (action_handler_t) add_node_activate},
         {"quit", (action_handler_t) quit_activate},
+        {"check_connected", (action_handler_t) check_connected_activate},
         {"hide_disabled", NULL, "b", "true", (action_handler_t) hide_disabled_change_state},
         {"node_show", (action_handler_t) node_show_activate, "(tt)"},
         {"node_toggle_disabled", (action_handler_t) node_toggle_disabled_activate, "(tt)"},
@@ -474,6 +531,7 @@ static void activate(GtkApplication *app, __attribute__((unused)) gpointer data)
     g_menu_append(file, "Add Node", "app.add_node");
     const char *add_accels[] = {"<Control>N", NULL};
     gtk_application_set_accels_for_action(app, "app.add_node", add_accels);
+    g_menu_append(file, "Check Connections", "app.check_connected");
     g_menu_append(file, "Quit", "app.quit");
     const char *quit_accels[] = {"<Control>Q", NULL};
     gtk_application_set_accels_for_action(app, "app.quit", quit_accels);
