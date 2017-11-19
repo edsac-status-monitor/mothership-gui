@@ -364,7 +364,7 @@ static GString *clickable_query(const Clickable *search, const char* fields) {
 }
 
 GList *search_clickable(const Clickable *search) {
-    GString *query = clickable_query(search, "errors.recv_time, errors.description, nodes.rack_no, nodes.chassis_no, errors.valve_no");
+    GString *query = clickable_query(search, "errors.recv_time, errors.description, nodes.rack_no, nodes.chassis_no, errors.valve_no, nodes.enabled, errors.enabled, errors.id");
     if (NULL == query) {
         return NULL;
     }
@@ -420,6 +420,12 @@ GList *search_clickable(const Clickable *search) {
         res->chassis_no = sqlite3_column_int(statement, 3);
         #pragma GCC diagnostic pop
         res->valve_no = sqlite3_column_int(statement, 4);
+
+        int node_enabled = sqlite3_column_int(statement, 5);
+        int error_enabled = sqlite3_column_int(statement, 6);
+        res->enabled = 1 == (node_enabled & error_enabled);
+
+        res->id = sqlite3_column_int(statement, 7);
 
         results = g_list_append(results, res);
     } while (true);

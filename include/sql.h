@@ -24,6 +24,8 @@ typedef struct {
     unsigned int rack_no;
     unsigned int chassis_no;
     int valve_no;
+    bool enabled;
+    int id;
 } SearchResult;
 
 typedef struct {
