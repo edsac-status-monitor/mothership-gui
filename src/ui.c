@@ -357,16 +357,15 @@ static void hide_disabled_change_state(GSimpleAction *simple) {
     assert(NULL != simple);
     gboolean hide_disabled = g_variant_get_boolean(g_action_get_state(G_ACTION(simple)));
 
-    puts("In handler");
     // toggle
     if (hide_disabled) {
         g_simple_action_set_state(simple, g_variant_new_boolean(FALSE));
-        puts("Now Showing disabled items");
+        //puts("Now Showing disabled items");
         set_show_disabled(true);
         gui_update(NULL);
    } else {
         g_simple_action_set_state(simple, g_variant_new_boolean(TRUE));
-        puts("Now hiding disabled items");
+        //puts("Now hiding disabled items");
         set_show_disabled(false);
         gui_update(NULL);
    }

@@ -523,12 +523,12 @@ GList *list_chassis_by_rack(const uintptr_t rack_no) {
 }
 
 GSList *list_nodes(void) {
-    const char *query = "SELECT rack_no, chassis_no FROM nodes;";
+    const char *query = "SELECT rack_no, chassis_no FROM nodes WHERE nodes.enabled = 1;";
 
     GSList *results = NULL;
 
     sqlite3_stmt *statement = NULL;
-    if (SQLITE_OK != sqlite3_prepare_v2(db, query, 39, &statement, NULL)) {
+    if (SQLITE_OK != sqlite3_prepare_v2(db, query, -1, &statement, NULL)) {
         puts("Error constructing list_nodes query");
         return NULL;
     }
