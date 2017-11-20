@@ -223,6 +223,7 @@ static void ok_callback(__attribute__((unused)) GtkButton *unused, gpointer user
     GtkTextBuffer *chassis_no_buffer = extract_buffer(grid, 1, 1);
     GtkTextBuffer *mac_address_buffer = extract_buffer(grid, 1, 2);
     GtkTextBuffer *config_file_buffer = extract_buffer(grid, 1, 3);
+    GtkToggleButton *toggle_button = GTK_TOGGLE_BUTTON(gtk_grid_get_child_at(grid, 0, 4));
 
     bool valid = is_uint(rack_no_buffer);
     valid &= is_uint(chassis_no_buffer);
@@ -258,6 +259,12 @@ static void ok_callback(__attribute__((unused)) GtkButton *unused, gpointer user
         add_node(rack_no, chassis_no, mac_addr, true, config_path);
         #pragma GCC diagnostic pop
         update_nodes_menu();
+
+        if (gtk_toggle_button_get_active(toggle_button)) {
+            puts("Setting up node");
+        } else {
+            puts("Not setting up node");
+        }
 
         // clean up
         g_free(rack_no_str);
@@ -300,8 +307,6 @@ static GtkTextView *new_text_view(GtkGrid *grid, gint left, gint top) {
 
 // handles the add_node action
 static void add_node_activate(void) {
-    puts("Add node");
-
     GtkWindow *add_node_window = GTK_WINDOW(gtk_window_new(GTK_WINDOW_TOPLEVEL));
     assert(NULL != add_node_window);
 //    gtk_window_set_decorated(add_node_window, FALSE);
@@ -343,6 +348,10 @@ static void add_node_activate(void) {
     GtkTextBuffer *buffer = gtk_text_view_get_buffer(config_path_text);
     g_object_ref(G_OBJECT(buffer));
     g_signal_connect(config_path_button, "pressed", G_CALLBACK(choose_config_file_callback), buffer);
+
+    GtkWidget *setup_toggle = gtk_check_button_new_with_label("Set up node");
+    assert(NULL != setup_toggle);
+    gtk_grid_attach(grid, setup_toggle, 0, 4, 1, 1);
 
     GtkWidget *ok_button = gtk_button_new_with_label("Ok");
     assert(NULL != ok_button);
