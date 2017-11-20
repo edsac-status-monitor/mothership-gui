@@ -71,6 +71,7 @@ GList *list_chassis_by_rack(const uintptr_t rack_no);
 GSList *list_nodes(void);
 
 bool node_toggle_disabled(const unsigned long int rack_no, const unsigned long int chassis_no);
+bool error_toggle_disabled(const uintptr_t id);
 
 // -1 on error
 int count_clickable(const Clickable *search);

@@ -568,11 +568,61 @@ GSList *list_nodes(void) {
     return results;
 }
 
+bool error_toggle_disabled(const uintptr_t id) {
+    assert(SQLITE_OK == sqlite3_exec(db, "begin transaction;", NULL, NULL, NULL));
+
+    // get the current state of the error
+    GString *query = g_string_new(NULL);
+    assert(NULL != query);
+    g_string_printf(query, "SELECT enabled from errors WHERE id=%li;", id);
+
+    sqlite3_stmt *statement = NULL;
+    if (SQLITE_OK != sqlite3_prepare_v2(db, query->str, -1, &statement, NULL)) {
+        g_string_free(query, TRUE);
+        assert(SQLITE_OK == sqlite3_exec(db, "commit;", NULL, NULL, NULL));
+        return false;
+    }
+    g_string_free(query, TRUE);
+
+    int enabled = -1;
+    int status = SQLITE_ERROR;
+    do {
+        status = sqlite3_step(statement);
+        if (SQLITE_DONE == status) {
+            break;
+        } else if (SQLITE_ROW != status) {
+            assert(SQLITE_OK == sqlite3_finalize(statement));
+            puts("Bad sqlite step toggle_error_disabled");
+            assert(SQLITE_OK == sqlite3_exec(db, "commit;", NULL, NULL, NULL));
+            return false;
+        }
+        // status == SQL_ROW
+        enabled = sqlite3_column_int(statement, 0);
+    } while (true);
+    assert(SQLITE_OK == sqlite3_finalize(statement));
+
+    if (-1 == enabled) {
+        puts("Error not found!");
+        assert(SQLITE_OK == sqlite3_exec(db, "commit;", NULL, NULL, NULL));
+        return false;
+    }
+
+    // update the node
+    GString *update = g_string_new(NULL);
+    g_string_sprintf(update, "UPDATE errors SET ENABLED = %i WHERE id = %li;", 1 - enabled, id);
+    assert(SQLITE_OK == sqlite3_exec(db, update->str, NULL, NULL, NULL));
+    g_string_free(update, TRUE);
+
+    assert(SQLITE_OK == sqlite3_exec(db, "commit;", NULL, NULL, NULL));
+    return true;
+}
+
 bool node_toggle_disabled(const unsigned long int rack_no, const unsigned long int chassis_no) {
     assert(SQLITE_OK == sqlite3_exec(db, "begin transaction;", NULL, NULL, NULL));
 
     // get the current state of the node
     GString *query = g_string_new(NULL);
+    assert(NULL != query);
     g_string_sprintf(query, "SELECT enabled FROM nodes WHERE rack_no=%li AND chassis_no=%li;", rack_no, chassis_no);
 
     sqlite3_stmt *statement = NULL;

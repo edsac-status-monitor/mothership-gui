@@ -16,6 +16,7 @@
 #include <stdlib.h>
 #include <pthread.h>
 #include "sql.h"
+#include "ui.h"
 
 // declarations
 
@@ -60,7 +61,9 @@ static GtkWidget *get_parent(const GtkWidget *child);
 
 // Signal Handlers
 static void close_button_handler(GtkWidget *button, GdkEvent *event, GtkWidget *contents);
-static void clicked(const GtkTextTag *tag, const GtkTextView *parent, const GdkEvent *event, const GtkTextIter *iter, Clickable *data);
+static void link_clicked(const GtkTextTag *tag, const GtkTextView *parent, const GdkEvent *event, const GtkTextIter *iter, Clickable *data);
+static void desc_clicked(const GtkTextTag *tag, const GtkTextView *parent, const GdkEvent *event, const GtkTextIter *iter, const gpointer error_id);
+static void disable_click(const uintptr_t id);
 
 /**** Public Methods ****/
 // update data to be in line with the database
@@ -356,19 +359,25 @@ static void append_linky_text_buffer(LinkyBuffer *linky_buffer, SearchResult *da
     if (data->valve_no >= 0) {
         linky_buffer->clickables = g_slist_prepend(linky_buffer->clickables, valve_data);
     }
+    
+    // tag over the description for right-clicking
+    GtkTextIter start;
+    GtkTextIter end;
+    gtk_text_buffer_get_iter_at_offset(linky_buffer->buffer, &start, (gint) valve_end);
+    gtk_text_buffer_get_end_iter(linky_buffer->buffer, &end);
 
+    GtkTextTag *description = NULL;
     // grey out disabled items
     if (!data->enabled) {
-        GtkTextIter start;
-        GtkTextIter end;
-        gtk_text_buffer_get_iter_at_offset(linky_buffer->buffer, &start, (gint) valve_end);
-        gtk_text_buffer_get_end_iter(linky_buffer->buffer, &end);
-
-        GtkTextTag *disabled = gtk_text_buffer_create_tag(linky_buffer->buffer, NULL,
+        description = gtk_text_buffer_create_tag(linky_buffer->buffer, NULL,
             "foreground", "grey", NULL);
-        gtk_text_buffer_apply_tag(linky_buffer->buffer, disabled, &start, &end);
+    } else {
+        description = gtk_text_buffer_create_tag(linky_buffer->buffer, NULL, NULL);
     }
+    g_signal_connect(G_OBJECT(description), "event", G_CALLBACK(desc_clicked), (gpointer) ((uintptr_t) data->id));
+    gtk_text_buffer_apply_tag(linky_buffer->buffer, description, &start, &end);
 
+    // links to other pages
     add_link(rack_start, rack_end, linky_buffer->buffer, rack_data);
     add_link(chassis_start, chassis_end, linky_buffer->buffer, chassis_data);
     if (data->valve_no >= 0) {
@@ -384,7 +393,7 @@ static void add_link(size_t start_pos, size_t end_pos, GtkTextBuffer *buffer, Cl
 
     // make it clickable
     // event is the only signal allowed on a tag
-    g_signal_connect(G_OBJECT(url), "event", G_CALLBACK(clicked), (gpointer) data);
+    g_signal_connect(G_OBJECT(url), "event", G_CALLBACK(link_clicked), (gpointer) data);
     
     GtkTextIter start;
     GtkTextIter end;
@@ -448,13 +457,13 @@ static void update_tab(gpointer data, __attribute__((unused)) gpointer unused) {
 
 
 /**** GTK Signal Handlers ****/
-// handler for when a text tag is clicked
-static void clicked(__attribute__((unused)) const GtkTextTag *tag, const GtkTextView *parent, const GdkEvent *event,
+// handler for when a link text tag is clicked
+static void link_clicked(__attribute__((unused)) const GtkTextTag *tag, const GtkTextView *parent, const GdkEvent *event,
                     __attribute__((unused)) const GtkTextIter *iter, Clickable *data) {
     assert(NULL != event);
     // work out if the event was a clicked
     GdkEventButton *event_btn = (GdkEventButton *) event;
-    if (event->type == GDK_BUTTON_RELEASE && event_btn->button == 1) {
+    if (event->type == GDK_BUTTON_PRESS && event_btn->button == 1) { // left click
         assert(NULL != data);
         assert(NULL != parent);
         // work up the tree to the notebook
@@ -463,6 +472,34 @@ static void clicked(__attribute__((unused)) const GtkTextTag *tag, const GtkText
         EdsacErrorNotebook *notebook = EDSAC_ERROR_NOTEBOOK(get_parent(scrolled_window));
 
         edsac_error_notebook_show_page(notebook, data);
+    }
+}
+
+static void disable_click(const uintptr_t id) {
+    error_toggle_disabled(id);
+    gui_update(NULL);
+}
+
+// handler for when a description is clicked
+static void desc_clicked(__attribute((unused)) const GtkTextTag *tag , __attribute__((unused)) const GtkTextView *parent, const GdkEvent *event,
+        __attribute__((unused)) const GtkTextIter *iter, const gpointer error_id) {
+    assert(NULL != event);
+
+    // was it a click?
+    GdkEventButton *event_btn = (GdkEventButton *) event;
+    if (event->type == GDK_BUTTON_PRESS && event_btn->button == 1) { // left click. Not using right click because TextView already has a context menu that we can't remove
+        // show right-click menu
+        GtkWidget *menu = gtk_menu_new();
+        assert(NULL != menu);
+
+        GtkWidget *menu_item = gtk_menu_item_new_with_label("Toggle Disabled");
+        assert(NULL != menu_item);
+
+        g_signal_connect_swapped(G_OBJECT(menu_item), "activate", G_CALLBACK(disable_click), error_id);
+
+        gtk_menu_shell_append(GTK_MENU_SHELL(menu), menu_item);
+        gtk_widget_show_all(menu);
+        gtk_menu_popup_at_pointer(GTK_MENU(menu), event); 
     }
 }
 
