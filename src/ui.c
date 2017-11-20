@@ -409,6 +409,7 @@ static void node_delete_activate(__attribute__((unused)) GSimpleAction *simple, 
 
     printf("Node %li %li removed\n", rack_no, chassis_no);
 
+    update_nodes_menu();
     gui_update(NULL);
 }
 
