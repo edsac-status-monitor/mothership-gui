@@ -211,6 +211,24 @@ bool remove_node(const unsigned int rack_no, const unsigned int chassis_no) {
     return ret;
 }
 
+bool node_exists(const int rack_no, const int chassis_no) {
+    GString *query = g_string_new(NULL);
+    assert(NULL != query);
+
+    g_string_sprintf(query, "SELECT COUNT(*) FROM nodes WHERE rack_no = %i AND chassis_no = %i;", rack_no, chassis_no);
+
+    sqlite3_stmt *statement = NULL;
+    assert(SQLITE_OK == sqlite3_prepare_v2(db, query->str, -1, &statement, NULL));
+    g_string_free(query, TRUE);
+
+    assert(SQLITE_ROW == sqlite3_step(statement));
+
+    const int count = sqlite3_column_int(statement, 0);
+
+    assert(SQLITE_OK == sqlite3_finalize(statement));
+    return (count != 0);
+}
+
 bool remove_all_errors(void) {
     const char *query = "DELETE FROM errors;";
 

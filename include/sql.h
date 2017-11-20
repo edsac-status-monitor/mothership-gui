@@ -53,6 +53,7 @@ bool get_show_disabled(void);
 
 bool add_node(const unsigned int rack_no, const unsigned int chassis_no, const char* mac_address, const bool enabled, const char* config_path);
 bool remove_node(const unsigned int rack_no, const unsigned int chassis_no);
+bool node_exists(const int rack_no, const int chassis_no);
 
 bool add_error(const BufferItem *error);
 bool add_error_decoded(const uint32_t rack_no, const uint32_t chassis_no, const int valve_no, const time_t recv_time, const char *msg);

@@ -243,16 +243,28 @@ static void ok_callback(__attribute__((unused)) GtkButton *unused, gpointer user
         valid = false;
     }
 
+    // get rack_no and chassis_no as numbers (safe because we already checked they are numbers)
+    char *rack_no_str = get_all_text(rack_no_buffer);
+    assert(NULL!= rack_no_str);
+    char *chassis_no_str = get_all_text(chassis_no_buffer);
+    assert(NULL != chassis_no_str);
+    const int rack_no = atoi(rack_no_str);
+    const int chassis_no = atoi(chassis_no_str);
+
+    // check that the node doesn't already exist
+    if (node_exists(rack_no, chassis_no)) {
+        valid = false;
+        set_error_text(rack_no_buffer);
+        set_error_text(chassis_no_buffer);
+
+        // dialog box to say so
+        GtkWidget *dialog = gtk_message_dialog_new(add_node_window, GTK_DIALOG_DESTROY_WITH_PARENT, GTK_MESSAGE_ERROR,
+                GTK_BUTTONS_CLOSE, "Node at rack %i, chassis %i already in database!", rack_no, chassis_no);
+        gtk_dialog_run(GTK_DIALOG(dialog));
+        gtk_widget_destroy(dialog);
+    }
+
     if (valid) {
-        char *rack_no_str = get_all_text(rack_no_buffer);
-        assert(NULL!= rack_no_str);
-        char *chassis_no_str = get_all_text(chassis_no_buffer);
-        assert(NULL != chassis_no_str);
-
-        // get rack_no and chassis_no as numbers (safe because we already checked they are numbers)
-        int rack_no = atoi(rack_no_str);
-        int chassis_no = atoi(chassis_no_str);
-
         // finally actually add the node
         #pragma GCC diagnostic push
         #pragma GCC diagnostic ignored "-Wsign-conversion"
