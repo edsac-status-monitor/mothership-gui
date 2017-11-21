@@ -45,13 +45,14 @@ static gint open_tabs_list_compare_by_id(gconstpointer a, gconstpointer b);
 static gint open_tabs_list_compare_by_desc(gconstpointer a, gconstpointer b);
 static void open_tabs_list_dec_id(gpointer data, gpointer unused);
 static gint open_tabs_list_search_by_id(gconstpointer result, gconstpointer id);
-static LinkyBuffer *new_linky_buffer(Clickable *description);
+static LinkyBuffer *new_linky_buffer(const Clickable *description);
 static void append_linky_text_buffer(LinkyBuffer *linky_buffer, SearchResult *data);
 static void free_g_string(gpointer g_string);
 static void free_linky_buffer(LinkyBuffer *linky_buffer);
 static void add_link(size_t start_pos, size_t end_pos, GtkTextBuffer *buffer, Clickable* data);
 static void update_tab(gpointer data, gpointer unused);
-static notebook_page_id_t add_new_page_to_notebook(EdsacErrorNotebook *self, Clickable *data);
+static notebook_page_id_t add_new_page_to_notebook(EdsacErrorNotebook *self, const Clickable *data);
+static void close_node(EdsacErrorNotebook *self, GSList *node_in_list);
 
 // GTK
 static GtkWidget *new_text_view(void);
@@ -93,7 +94,7 @@ int edsac_error_notebook_get_error_count(EdsacErrorNotebook *self) {
     return count_clickable(&linky_buffer->description);
 }
 
-void edsac_error_notebook_show_page(EdsacErrorNotebook *self, Clickable *data) {
+void edsac_error_notebook_show_page(EdsacErrorNotebook *self, const Clickable *data) {
     // check if the tab we want is already open
     LinkyBuffer data_desc;
     data_desc.page_id = -1;
@@ -112,8 +113,34 @@ void edsac_error_notebook_show_page(EdsacErrorNotebook *self, Clickable *data) {
     add_new_page_to_notebook(self, data);
 }
 
+void edsac_error_notebook_close_node(EdsacErrorNotebook *self, const unsigned int rack_no, const unsigned int chassis_no) {
+    if (NULL == self)
+        return;
+
+    GSList *item = self->priv->open_tabs_list;
+    while (NULL != item) {
+        LinkyBuffer *linky_buffer = item->data;
+        if (NULL == linky_buffer)
+            return;
+
+        if (linky_buffer->description.rack_num == rack_no) {
+            if (linky_buffer->description.chassis_num == chassis_no) {
+                // this tab needs closing
+                close_node(self, item);
+                // the list has now changed so search back from the beginning (strictly we only need to go back by one but in a very short singley linked list this is much easier to do)
+                item = self->priv->open_tabs_list;
+            } else {
+                item = item->next;
+            }
+        } else {
+            item = item->next;
+        }
+
+    }
+}
+
 // add a new page to the notebook
-static notebook_page_id_t add_new_page_to_notebook(EdsacErrorNotebook *self, Clickable *data) {
+static notebook_page_id_t add_new_page_to_notebook(EdsacErrorNotebook *self, const Clickable *data) {
     if ((NULL == self) || (NULL == data)) {
         return NULL;
     }
@@ -179,6 +206,40 @@ static notebook_page_id_t add_new_page_to_notebook(EdsacErrorNotebook *self, Cli
     gtk_notebook_set_current_page(notebook, index);
 
     return linky_buffer;
+}
+
+static void close_node(EdsacErrorNotebook *self, GSList *node_in_list) {
+    assert(NULL != node_in_list);
+
+    LinkyBuffer *tab_page_desc = node_in_list->data;
+    const gint page_id = tab_page_desc->page_id;
+
+    // any tabs after this one need to have their id adjusted down by 1 (assuming list sorted by id)
+    // open_tabs_list_dec_id does locking
+    g_slist_foreach(node_in_list, open_tabs_list_dec_id, NULL);
+
+    // remove tab from the list
+    self->priv->open_tabs_list = g_slist_delete_link(self->priv->open_tabs_list, node_in_list);
+
+    // remove page from notebook
+    gtk_notebook_remove_page(GTK_NOTEBOOK(self), page_id);
+
+    // free the linky buffer
+    free_linky_buffer(tab_page_desc);
+
+    // close the window if the last page is closed
+    if (0 == gtk_notebook_get_n_pages(GTK_NOTEBOOK(self))) {
+        GtkWidget *toplevel = gtk_widget_get_toplevel(GTK_WIDGET(self));
+        if (gtk_widget_is_toplevel(toplevel)) { // docs recommend this extra check https://developer.gnome.org/gtk3/stable/GtkWidget.html#gtk-widget-get-toplevel
+            GtkWindow *window = GTK_WINDOW(toplevel);
+            assert(NULL != window);
+
+            gtk_window_close(window);
+        } else {
+            perror("Could not find the top level widget");
+            exit(EXIT_FAILURE);
+        }
+    }
 }
 
 
@@ -274,7 +335,7 @@ static gint open_tabs_list_search_by_id(gconstpointer result, gconstpointer id) 
 }
 
 // creates a new LinkyBuffer
-static LinkyBuffer *new_linky_buffer(Clickable *desc) {
+static LinkyBuffer *new_linky_buffer(const Clickable *desc) {
     LinkyBuffer *linky_buffer = malloc(sizeof(LinkyBuffer));
     assert(NULL != linky_buffer);
 
@@ -514,7 +575,7 @@ static void close_button_handler(GtkWidget *button, __attribute__((unused)) GdkE
     EdsacErrorNotebook *notebook = EDSAC_ERROR_NOTEBOOK(get_parent(frame));
     assert(NULL != notebook);
 
-    gint page_num = gtk_notebook_page_num(GTK_NOTEBOOK(notebook), contents);
+    const gint page_num = gtk_notebook_page_num(GTK_NOTEBOOK(notebook), contents);
     if (-1 == page_num)
         return;
 
@@ -527,36 +588,7 @@ static void close_button_handler(GtkWidget *button, __attribute__((unused)) GdkE
         g_print("Closing a tab which was not open! id=%i\n", page_num);
         return;
     } else {
-        LinkyBuffer *tab_page_desc = (LinkyBuffer *) result->data;
-
-        // any tabs after this one need to have their id adjusted down by 1 (assuming list sorted by id)
-        // open_tabs_list_dec_id does locking
-        g_slist_foreach(result, open_tabs_list_dec_id, NULL);
-
-        // remove tab from the list
-        // TODO are you very sure this shouldn't be g_slist_delete_link?
-        notebook->priv->open_tabs_list = g_slist_delete_link(notebook->priv->open_tabs_list, result);
-
-        // free the linky buffer
-        free_linky_buffer(tab_page_desc);
-
-        // remove page from notebook
-        gtk_notebook_remove_page(GTK_NOTEBOOK(notebook), page_num);
-
-        // close the window if the last page is closed
-        if (0 == gtk_notebook_get_n_pages(GTK_NOTEBOOK(notebook))) {
-            GtkWidget *toplevel = gtk_widget_get_toplevel(GTK_WIDGET(notebook));
-            if (gtk_widget_is_toplevel(toplevel)) { // docs recommend this extra check https://developer.gnome.org/gtk3/stable/GtkWidget.html#gtk-widget-get-toplevel
-                GtkWindow *window = GTK_WINDOW(toplevel);
-                assert(NULL != window);
-
-                gtk_window_close(window);
-            } else {
-                perror("Could not find the top level widget");
-                exit(EXIT_FAILURE);
-            }
-        }
-
+        close_node(notebook, result);
     } 
 }
 

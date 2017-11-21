@@ -65,7 +65,8 @@ typedef struct {
 EdsacErrorNotebook *edsac_error_notebook_new(void);
 void edsac_error_notebook_update(EdsacErrorNotebook *self);
 int edsac_error_notebook_get_error_count(EdsacErrorNotebook *self);
-void edsac_error_notebook_show_page(EdsacErrorNotebook *self, Clickable *data);
+void edsac_error_notebook_show_page(EdsacErrorNotebook *self, const Clickable *data);
+void edsac_error_notebook_close_node(EdsacErrorNotebook *self, const unsigned int rack_no, const unsigned int chassis_no);
 
 // boilerplate public methods
 EdsacErrorNotebook *edsac_error_notebook_construct(GType object_type);

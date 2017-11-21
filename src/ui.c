@@ -428,6 +428,8 @@ static void node_delete_activate(__attribute__((unused)) GSimpleAction *simple, 
     assert(true == remove_node(rack_no, chassis_no));
     #pragma GCC diagnostic pop
 
+    edsac_error_notebook_close_node(notebook, (unsigned int) rack_no, (unsigned int) chassis_no);
+
     printf("Node %li %li removed\n", rack_no, chassis_no);
 
     update_nodes_menu();
