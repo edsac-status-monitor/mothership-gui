@@ -11,8 +11,10 @@ AC_LOCAL_AMFLAGS = -I m4 --install
 AM_CFLAGS = -Wall -Wextra -pedantic -Wshadow -Wpointer-arith -Wcast-align -Wwrite-strings -Wmissing-prototypes -Wmissing-declarations -Wredundant-decls -Wnested-externs -Winline -Wno-long-long -Wuninitialized -Wconversion -Wstrict-prototypes -Werror -O -g -std=c11 -fstack-protector-strong -I include -I$(top_srcdir)/include $(GLIB_CFLAGS) $(GTK_CFLAGS) $(LIBEDSACNETWORKING_CFLAGS) $(PTHREAD_CFLAGS) $(SQLITE_CFLAGS)
 
 # Unit tests
-check_PROGRAMS = sql.test
+check_PROGRAMS = sql.test add_errors.test
 sql_test_SOURCES = src/test/sql-test.c src/sql.c include/sql.h
 sql_test_LDADD = $(PTHREAD_LIBS) $(SQLITE_LIBS) $(GLIB_LIBS) $(LIBEDSACNETWORKING_LIBS)
+add_errors_test_SOURCES = src/sql.c include/sql.h src/test/add_errors.c
+add_errors_test_LDADD = $(PTHREAD_LIBS) $(SQLITE_LIBS) $(GLIB_LIBS) $(LIBEDSACNETWORKING_LIBS)
 TESTS = sql.test
 
