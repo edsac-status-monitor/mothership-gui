@@ -124,7 +124,10 @@ void init_database(const char *path) {
         } else {
             printf("Creating a new database at %s\n", path);
             // open database with sqlite
-            assert(SQLITE_OK == sqlite3_open(path, &db));
+            if (SQLITE_OK != sqlite3_open(path, &db)) {
+                fprintf(stderr, "I did not have permissions to create database file %s\n", path);
+                exit(EXIT_FAILURE);
+            }
         }
     } else {
         puts("Creating memory resident database");

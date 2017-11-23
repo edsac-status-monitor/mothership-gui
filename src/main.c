@@ -87,7 +87,10 @@ int main(int argc, char** argv) {
 
     assert(true == create_timer((timer_handler_t) periodic_update, &timer_id, update_time));
 
-    assert (true == start_server(addr, sizeof(*addr)));
+   if (false == start_server(addr, sizeof(*addr))) {
+       fprintf(stderr, "Unable to bind to address\n");
+       exit(EXIT_FAILURE);
+   }
 
     return start_ui(&argc, &argv, (gpointer) &timer_id);
 }
