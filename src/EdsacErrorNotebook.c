@@ -52,7 +52,7 @@ static void free_linky_buffer(LinkyBuffer *linky_buffer);
 static void add_link(size_t start_pos, size_t end_pos, GtkTextBuffer *buffer, Clickable* data);
 static void update_tab(gpointer data, gpointer unused);
 static notebook_page_id_t add_new_page_to_notebook(EdsacErrorNotebook *self, const Clickable *data);
-static void close_node(EdsacErrorNotebook *self, GSList *node_in_list);
+static void close_tab(EdsacErrorNotebook *self, GSList *tab_in_list);
 
 // GTK
 static GtkWidget *new_text_view(void);
@@ -126,7 +126,7 @@ void edsac_error_notebook_close_node(EdsacErrorNotebook *self, const unsigned in
         if (linky_buffer->description.rack_num == rack_no) {
             if (linky_buffer->description.chassis_num == chassis_no) {
                 // this tab needs closing
-                close_node(self, item);
+                close_tab(self, item);
                 // the list has now changed so search back from the beginning (strictly we only need to go back by one but in a very short singley linked list this is much easier to do)
                 item = self->priv->open_tabs_list;
             } else {
@@ -208,18 +208,18 @@ static notebook_page_id_t add_new_page_to_notebook(EdsacErrorNotebook *self, con
     return linky_buffer;
 }
 
-static void close_node(EdsacErrorNotebook *self, GSList *node_in_list) {
-    assert(NULL != node_in_list);
+static void close_tab(EdsacErrorNotebook *self, GSList *tab_in_list) {
+    assert(NULL != tab_in_list);
 
-    LinkyBuffer *tab_page_desc = node_in_list->data;
+    LinkyBuffer *tab_page_desc = tab_in_list->data;
     const gint page_id = tab_page_desc->page_id;
 
     // any tabs after this one need to have their id adjusted down by 1 (assuming list sorted by id)
     // open_tabs_list_dec_id does locking
-    g_slist_foreach(node_in_list, open_tabs_list_dec_id, NULL);
+    g_slist_foreach(tab_in_list, open_tabs_list_dec_id, NULL);
 
     // remove tab from the list
-    self->priv->open_tabs_list = g_slist_delete_link(self->priv->open_tabs_list, node_in_list);
+    self->priv->open_tabs_list = g_slist_delete_link(self->priv->open_tabs_list, tab_in_list);
 
     // remove page from notebook
     gtk_notebook_remove_page(GTK_NOTEBOOK(self), page_id);
@@ -588,7 +588,7 @@ static void close_button_handler(GtkWidget *button, __attribute__((unused)) GdkE
         g_print("Closing a tab which was not open! id=%i\n", page_num);
         return;
     } else {
-        close_node(notebook, result);
+        close_tab(notebook, result);
     } 
 }
 
