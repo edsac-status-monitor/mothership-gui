@@ -44,9 +44,6 @@ void close_database(void);
 // get the fields we want out of the IP v4 address (xxx.xxx.rack_no.chassis_no)
 NodeIdentifier *parse_ip_address(const struct in_addr *address);
 
-// false on error
-bool create_tables(void);
-
 // only effects things which search on clickables
 void set_show_disabled(bool new_val);
 bool get_show_disabled(void);

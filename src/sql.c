@@ -75,7 +75,7 @@ static GString *fix_string(const char* str) {
     return ret;
 }
 
-bool create_tables(void) {
+static bool create_tables(void) {
     const char *table_create_sql = \
     "CREATE TABLE nodes(\
 	    id INTEGER PRIMARY KEY NOT NULL UNIQUE,\

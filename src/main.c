@@ -80,7 +80,6 @@ int main(int argc, char** argv) {
         init_database(db_path);
     }
 
-
     if (db_path_set) {
         g_free(db_path);
     }

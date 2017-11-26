@@ -278,15 +278,14 @@ static void ok_callback(__attribute__((unused)) GtkButton *unused, gpointer user
             puts("Not setting up node");
         }
 
+        g_object_unref(G_OBJECT(config_file_buffer)); // ref'ed in add_node_activate
+        gtk_window_close(add_node_window);
+    }
         // clean up
         g_free(rack_no_str);
         g_free(chassis_no_str);
         g_free(config_path);
         g_free(mac_addr);
-        g_object_unref(G_OBJECT(config_file_buffer)); // ref'ed in add_node_activate
-
-        gtk_window_close(add_node_window);
-    }
 }
 
 static void clear_text_tags(GtkTextBuffer *buffer) {

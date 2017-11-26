@@ -22,7 +22,7 @@
 
 // context for an open tab
 typedef struct _LinkyTextBuffer {
-    Clickable description; // information about what this is a list of
+    Clickable description;  // information about what this is a list of
     GtkTextBuffer *buffer;  // the text buffer
     GSList *g_string_list;  // stuff to call g_string_free(., TRUE) on when we clear buffer
     GSList *clickables;     // Clickables *within the text buffer* we need to free
