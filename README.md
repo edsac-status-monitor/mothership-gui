@@ -9,7 +9,7 @@ SQLite-3 >= 3.8.7
 
 On debian & ubuntu the following packages are required to build mothership-gui:
 ```
-gcc autoconf libglib2.0-dev libtool make libgtk-3-dev libsqlite3-dev
+gcc autoconf libglib2.0-dev make pkg-config libgtk-3-dev libsqlite3-dev
 ```
 
 You will also need edsac-status-monitor/libnetworking to be installed. 
