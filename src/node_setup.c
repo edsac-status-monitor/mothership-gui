@@ -16,6 +16,8 @@
 #include <assert.h>
 
 static const char subnet[] = "172.16";
+static const char user[] = "pi"; // user used when logging in over ssh
+static const char term[] = "/usr/bin/gnome-terminal --";
 
 // command must not use single quotes
 // obviously use with care
@@ -120,4 +122,23 @@ void node_cleanup_network(const unsigned int rack_no, const unsigned int chassis
     g_free(hosts_str);
     g_free(dhcp_str);
     g_string_free(combined, TRUE);
+}
+
+bool copy_file(const unsigned int rack_no, const unsigned int chassis_no, const char *src, const char *dest) {
+    assert(NULL != src);
+    assert(NULL != dest);
+
+    GString *command = g_string_new(NULL);
+    assert(NULL != command);
+
+    g_string_printf(command, "%s /usr/bin/scp '%s' %s@%s.%i.%i:%s", term, src, user, subnet, rack_no, chassis_no, dest);
+
+    int res = system(command->str);
+
+    g_string_free(command, TRUE);
+
+    if (EXIT_SUCCESS == res) {
+        return true;
+    }
+    return false;
 }

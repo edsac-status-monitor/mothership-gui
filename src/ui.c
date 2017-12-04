@@ -281,17 +281,27 @@ static void ok_callback(__attribute__((unused)) GtkButton *unused, gpointer user
                 gtk_widget_destroy(bad_setup_dialog);
             } else {
                 // else it worked
-                // add the node to the database
-                add_node(rack_no, chassis_no, mac_addr, true, config_path);
-                update_nodes_menu();
+                // ask the user to boot the node
+                GtkWidget *delay_dialog = gtk_message_dialog_new(add_node_window, GTK_DIALOG_DESTROY_WITH_PARENT, GTK_MESSAGE_INFO,
+                    GTK_BUTTONS_OK, "Please press OK once the node is (re)booted");
+                gtk_dialog_run(GTK_DIALOG(delay_dialog));
+                gtk_widget_destroy(delay_dialog);
+
+                // copy over config file
+                if (!copy_file(rack_no, chassis_no, config_path, "~/")) {
+                    // complain
+                    GtkWidget *bad_copy_dialog = gtk_message_dialog_new(add_node_window, GTK_DIALOG_DESTROY_WITH_PARENT, GTK_MESSAGE_ERROR,
+                        GTK_BUTTONS_CLOSE, "Failed to copy configuration file to node!");
+                    gtk_dialog_run(GTK_DIALOG(bad_copy_dialog));
+                    gtk_widget_destroy(bad_copy_dialog);
+                } 
             }
-        } else {
-            // else don't set up node
-            // add the node to the database
-            add_node(rack_no, chassis_no, mac_addr, true, config_path);
-            update_nodes_menu();
         }
 
+        // add the node to the database
+        add_node(rack_no, chassis_no, mac_addr, true, config_path);
+        update_nodes_menu();
+ 
         g_object_unref(G_OBJECT(config_file_buffer)); // ref'ed in add_node_activate
         gtk_window_close(add_node_window);
     }

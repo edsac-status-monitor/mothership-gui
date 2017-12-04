@@ -25,6 +25,9 @@ bool setup_node_network(const unsigned int rack_no, const unsigned int chassis_n
 // attempt to revert the changes made in setup_node
 void node_cleanup_network(const unsigned int rack_no, const unsigned int chassis_no);
 
+// copy file to node using ssh
+bool copy_file(const unsigned int rack_no, const unsigned int chassis_no, const char *src, const char *dest);
+
 #ifdef _cplusplus
 }
 #endif // _cplusplus
