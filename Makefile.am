@@ -1,6 +1,6 @@
 # make static library target
 bin_PROGRAMS = mothership_gui
-mothership_gui_SOURCES = src/main.c src/EdsacErrorNotebook.c include/EdsacErrorNotebook.h src/sql.c include/sql.h src/ui.c include/ui.h
+mothership_gui_SOURCES = src/main.c src/EdsacErrorNotebook.c include/EdsacErrorNotebook.h src/sql.c include/sql.h src/ui.c include/ui.h src/node_setup.c include/node_setup.h
 mothership_gui_LDADD = $(GLIB_LIBS) $(GTK_LIBS) $(LIBEDSACNETWORKING_LIBS) $(PTHREAD_LIBS) $(SQLITE_LIBS)
 
 # make subdirectories work

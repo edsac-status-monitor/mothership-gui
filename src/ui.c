@@ -17,6 +17,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <time.h>
+#include "node_setup.h"
 
 // declarations
 static void activate(GtkApplication *app, gpointer data);
@@ -248,8 +249,12 @@ static void ok_callback(__attribute__((unused)) GtkButton *unused, gpointer user
     assert(NULL!= rack_no_str);
     char *chassis_no_str = get_all_text(chassis_no_buffer);
     assert(NULL != chassis_no_str);
-    const int rack_no = atoi(rack_no_str);
-    const int chassis_no = atoi(chassis_no_str);
+
+    #pragma GCC diagnostic push
+    #pragma GCC diagnostic ignored "-Wsign-conversion"
+    const unsigned int rack_no = atoi(rack_no_str);
+    const unsigned int chassis_no = atoi(chassis_no_str);
+    #pragma GCC diagnostic pop
 
     // check that the node doesn't already exist
     if (node_exists(rack_no, chassis_no)) {
@@ -265,27 +270,37 @@ static void ok_callback(__attribute__((unused)) GtkButton *unused, gpointer user
     }
 
     if (valid) {
-        // finally actually add the node
-        #pragma GCC diagnostic push
-        #pragma GCC diagnostic ignored "-Wsign-conversion"
-        add_node(rack_no, chassis_no, mac_addr, true, config_path);
-        #pragma GCC diagnostic pop
-        update_nodes_menu();
 
         if (gtk_toggle_button_get_active(toggle_button)) {
-            puts("Setting up node");
+            // set up node
+            if (!setup_node(rack_no, chassis_no, mac_addr)) {
+                // complain
+                GtkWidget *bad_setup_dialog = gtk_message_dialog_new(add_node_window, GTK_DIALOG_DESTROY_WITH_PARENT, GTK_MESSAGE_ERROR,
+                    GTK_BUTTONS_CLOSE, "Failed to set up node!");
+                gtk_dialog_run(GTK_DIALOG(bad_setup_dialog));
+                gtk_widget_destroy(bad_setup_dialog);
+            } else {
+                // else it worked
+                // add the node to the database
+                add_node(rack_no, chassis_no, mac_addr, true, config_path);
+                update_nodes_menu();
+            }
         } else {
-            puts("Not setting up node");
+            // else don't set up node
+            // add the node to the database
+            add_node(rack_no, chassis_no, mac_addr, true, config_path);
+            update_nodes_menu();
         }
 
         g_object_unref(G_OBJECT(config_file_buffer)); // ref'ed in add_node_activate
         gtk_window_close(add_node_window);
     }
-        // clean up
-        g_free(rack_no_str);
-        g_free(chassis_no_str);
-        g_free(config_path);
-        g_free(mac_addr);
+
+    // clean up
+    g_free(rack_no_str);
+    g_free(chassis_no_str);
+    g_free(config_path);
+    g_free(mac_addr);
 }
 
 static void clear_text_tags(GtkTextBuffer *buffer) {
@@ -428,6 +443,9 @@ static void node_delete_activate(__attribute__((unused)) GSimpleAction *simple, 
     #pragma GCC diagnostic pop
 
     edsac_error_notebook_close_node(notebook, (unsigned int) rack_no, (unsigned int) chassis_no);
+
+    // clean up node network configuration
+    node_cleanup((unsigned int) rack_no, (unsigned int) chassis_no);
 
     printf("Node %li %li removed\n", rack_no, chassis_no);
 

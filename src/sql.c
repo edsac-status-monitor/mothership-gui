@@ -214,7 +214,7 @@ bool remove_node(const unsigned int rack_no, const unsigned int chassis_no) {
     return ret;
 }
 
-bool node_exists(const int rack_no, const int chassis_no) {
+bool node_exists(const unsigned int rack_no, const unsigned int chassis_no) {
     GString *query = g_string_new(NULL);
     assert(NULL != query);
 
