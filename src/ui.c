@@ -216,6 +216,7 @@ static GtkTextBuffer *extract_buffer(GtkGrid *grid, gint left, gint top) {
 }
 
 static void ok_callback(__attribute__((unused)) GtkButton *unused, gpointer user_data) {
+    char *config_path = NULL;
     assert(NULL != user_data);
     GtkWindow *add_node_window = GTK_WINDOW(user_data);
     GtkGrid *grid = GTK_GRID(gtk_bin_get_child(GTK_BIN(add_node_window)));
@@ -231,18 +232,6 @@ static void ok_callback(__attribute__((unused)) GtkButton *unused, gpointer user
 
     char *mac_addr = get_all_text(mac_address_buffer);
     assert(NULL != mac_addr);
-
-    if (!check_mac_address(mac_addr)) {
-        set_error_text(mac_address_buffer);
-        valid = false;
-    }
-
-    char *config_path = get_all_text(config_file_buffer);
-    assert(NULL != config_path);
-    if (F_OK != access(config_path, R_OK)) {
-        set_error_text(config_file_buffer);
-        valid = false;
-    }
 
     // get rack_no and chassis_no as numbers (safe because we already checked they are numbers)
     char *rack_no_str = get_all_text(rack_no_buffer);
@@ -269,10 +258,29 @@ static void ok_callback(__attribute__((unused)) GtkButton *unused, gpointer user
         gtk_widget_destroy(dialog);
     }
 
-    if (valid) {
-
+    if (valid) { // if everything so far was valid
+        // do we set up the node?
         if (gtk_toggle_button_get_active(toggle_button)) {
-            // set up node
+            // we should set up node
+
+            // error check stuff we didn't care about before
+            if (!check_mac_address(mac_addr)) {
+                set_error_text(mac_address_buffer);
+                valid = false;
+            }
+
+            config_path = get_all_text(config_file_buffer);
+            assert(NULL != config_path);
+            if (F_OK != access(config_path, R_OK)) {
+                set_error_text(config_file_buffer);
+                valid = false;
+            }
+            
+            if (!valid) {
+                goto clean_up;
+            }
+
+            // actually set up the node
             if (!setup_node_network(rack_no, chassis_no, mac_addr)) {
                 // complain
                 GtkWidget *bad_setup_dialog = gtk_message_dialog_new(add_node_window, GTK_DIALOG_DESTROY_WITH_PARENT, GTK_MESSAGE_ERROR,
@@ -299,7 +307,7 @@ static void ok_callback(__attribute__((unused)) GtkButton *unused, gpointer user
         }
 
         // add the node to the database
-        add_node(rack_no, chassis_no, mac_addr, true, config_path);
+        add_node(rack_no, chassis_no, true);
         update_nodes_menu();
  
         g_object_unref(G_OBJECT(config_file_buffer)); // ref'ed in add_node_activate
@@ -307,6 +315,7 @@ static void ok_callback(__attribute__((unused)) GtkButton *unused, gpointer user
     }
 
     // clean up
+    clean_up:
     g_free(rack_no_str);
     g_free(chassis_no_str);
     g_free(config_path);
@@ -338,6 +347,8 @@ static GtkTextView *new_text_view(GtkGrid *grid, gint left, gint top) {
     gtk_container_add(GTK_CONTAINER(frame), text);
     gtk_grid_attach(grid, frame, left, top, 1, 1);
 
+    gtk_text_view_set_input_hints(GTK_TEXT_VIEW(text), GTK_INPUT_HINT_NO_EMOJI | GTK_INPUT_HINT_NO_SPELLCHECK);
+
     return GTK_TEXT_VIEW(text);
 }
 
@@ -362,19 +373,22 @@ static void add_node_activate(void) {
     assert(NULL != rack_no_label);
     gtk_grid_attach(grid, rack_no_label, 0, 0, 1, 1);
 
-    new_text_view(grid, 1, 0);
+    GtkTextView *rack_no_text = new_text_view(grid, 1, 0);
+    gtk_text_view_set_input_purpose(rack_no_text, GTK_INPUT_PURPOSE_DIGITS);
 
     GtkWidget *chassis_no_label = gtk_label_new("Chassis Number");
     assert(NULL != chassis_no_label);
     gtk_grid_attach(grid, chassis_no_label, 0, 1, 1, 1);
 
-    new_text_view(grid, 1, 1);
+    GtkTextView *chassis_no_text = new_text_view(grid, 1, 1);
+    gtk_text_view_set_input_purpose(chassis_no_text, GTK_INPUT_PURPOSE_DIGITS);
 
     GtkWidget *mac_address_label = gtk_label_new("Mac Address");
     assert(NULL != mac_address_label);
     gtk_grid_attach(grid, mac_address_label, 0, 2, 1, 1);
 
-    new_text_view(grid, 1, 2);
+    GtkTextView *mac_address_text = new_text_view(grid, 1, 2);
+    gtk_text_view_set_input_hints(mac_address_text, GTK_INPUT_HINT_LOWERCASE | GTK_INPUT_HINT_EMOJI | GTK_INPUT_HINT_NO_SPELLCHECK);
 
     GtkTextView *config_path_text = new_text_view(grid, 1, 3);
 

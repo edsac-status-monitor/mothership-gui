@@ -48,7 +48,7 @@ NodeIdentifier *parse_ip_address(const struct in_addr *address);
 void set_show_disabled(bool new_val);
 bool get_show_disabled(void);
 
-bool add_node(const unsigned int rack_no, const unsigned int chassis_no, const char* mac_address, const bool enabled, const char* config_path);
+bool add_node(const unsigned int rack_no, const unsigned int chassis_no, const bool enabled);
 bool remove_node(const unsigned int rack_no, const unsigned int chassis_no);
 bool node_exists(const unsigned int rack_no, const unsigned int chassis_no);
 

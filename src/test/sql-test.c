@@ -95,27 +95,12 @@ static void search_error(const unsigned int rack_no, const unsigned int chassis_
 }
 
 int main(void) {
-    const char* correct_mac = "ff:ff:ff:ff:ff:ff";
     init_database(NULL); // NULL: memory only database
 
-    // invalid mac address
-    assert(false == add_node(0, 1, "not a mac address", false, "myconfig"));
-
-    // null mac address
-    assert(false == add_node(0, 1, NULL, false, "myconfig"));
-
-    // null config path
-    assert(false == add_node(0, 1, correct_mac, false, NULL));
-
-    // malicious config path
-    // if this wasn't fixed then the query would give a syntax error
-    assert(true == add_node(0, 1, correct_mac, false, "\" lala sqlite will error. I could drop all your tables!!!"));
-    assert(true == remove_node(0, 1));
-
-    // add a valid nodes to use with the errors
-    assert(true == add_node(0, 0, correct_mac, true, "myconfig"));
-    assert(true == add_node(0, 1, correct_mac, true, "myconfig"));
-    assert(true == add_node(0, 2, correct_mac, true, "myconfig"));
+    // add valid nodes to use with the errors
+    assert(true == add_node(0, 0, true));
+    assert(true == add_node(0, 1, true));
+    assert(true == add_node(0, 2, true));
 
     // for count searching
     Clickable search;
@@ -182,7 +167,7 @@ int main(void) {
     assert(NULL == rack_0->prev);
 
     // add another rack
-    assert(true == add_node(1, 0, correct_mac, true, "blah"));
+    assert(true == add_node(1, 0, true));
     // check the list now
     GList *rack_01 = list_racks();
     assert(NULL != rack_01);

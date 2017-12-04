@@ -81,9 +81,7 @@ static bool create_tables(void) {
 	    id INTEGER PRIMARY KEY NOT NULL UNIQUE,\
 	    rack_no INTEGER NOT NULL,\
 	    chassis_no INTEGER NOT NULL,\
-	    mac_address TEXT NOT NULL,\
 	    enabled INTEGER DEFAULT 1,\
-	    config TEXT NOT NULL,\
 	    UNIQUE(rack_no, chassis_no)\
     );\
     CREATE TABLE errors(\
@@ -144,19 +142,7 @@ void close_database(void) {
     assert(SQLITE_OK == sqlite3_close(db));
 }
 
-bool add_node(const unsigned int rack_no, const unsigned int chassis_no, const char* mac_address, const bool enabled, const char* config_path) {
-    if (!check_mac_address(mac_address)) {
-        puts("mac");
-        return false;
-    }
-
-    if (NULL == config_path) {
-        puts("config");
-        return false;
-    }
-
-    GString *config_string = fix_string(config_path);
-
+bool add_node(const unsigned int rack_no, const unsigned int chassis_no, const bool enabled) {
     gint enabled_int;
     if (enabled) {
         enabled_int = 1;
@@ -168,8 +154,8 @@ bool add_node(const unsigned int rack_no, const unsigned int chassis_no, const c
     assert(NULL != query);
 
     g_string_printf(query,
-        "INSERT into nodes(rack_no, chassis_no, mac_address, enabled, config) VALUES(%i, %i, \"%s\", %i, \"%s\");", 
-        rack_no, chassis_no, mac_address, enabled_int, config_string->str);
+        "INSERT into nodes(rack_no, chassis_no, enabled) VALUES(%i, %i, %i);", 
+        rack_no, chassis_no, enabled_int);
 
     bool ret = true;
     char *errstr = NULL;
@@ -179,7 +165,6 @@ bool add_node(const unsigned int rack_no, const unsigned int chassis_no, const c
     }
 
     g_string_free(query, TRUE);
-    g_string_free(config_string, TRUE);
 
     return ret;
 }
