@@ -273,7 +273,7 @@ static void ok_callback(__attribute__((unused)) GtkButton *unused, gpointer user
 
         if (gtk_toggle_button_get_active(toggle_button)) {
             // set up node
-            if (!setup_node(rack_no, chassis_no, mac_addr)) {
+            if (!setup_node_network(rack_no, chassis_no, mac_addr)) {
                 // complain
                 GtkWidget *bad_setup_dialog = gtk_message_dialog_new(add_node_window, GTK_DIALOG_DESTROY_WITH_PARENT, GTK_MESSAGE_ERROR,
                     GTK_BUTTONS_CLOSE, "Failed to set up node!");
@@ -445,7 +445,7 @@ static void node_delete_activate(__attribute__((unused)) GSimpleAction *simple, 
     edsac_error_notebook_close_node(notebook, (unsigned int) rack_no, (unsigned int) chassis_no);
 
     // clean up node network configuration
-    node_cleanup((unsigned int) rack_no, (unsigned int) chassis_no);
+    node_cleanup_network((unsigned int) rack_no, (unsigned int) chassis_no);
 
     printf("Node %li %li removed\n", rack_no, chassis_no);
 

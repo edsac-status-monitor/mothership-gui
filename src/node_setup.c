@@ -21,7 +21,7 @@ static const char subnet[] = "172.16";
 // obviously use with care
 static bool run_as_root(const char *command) {
     assert(NULL != command);
-    fprintf(stderr, "Running %s as root\n", command);
+    fprintf(stderr, "Running as root: %s\n", command);
 
     // pkexec requires GNOME
     GString *exec = g_string_new("/usr/bin/pkexec --user root /bin/bash -c ");
@@ -41,10 +41,9 @@ static bool run_as_root(const char *command) {
     return false;
 }
 
-// append text to file as root
-// obviously use with care
+// append text to file
 // text shouldn't contain quotes
-static bool append_to_file_root(const char *path, const char *text) {
+static char *append_to_file(const char *path, const char *text) {
     assert(NULL != path);
     assert(NULL != text);
 
@@ -53,56 +52,72 @@ static bool append_to_file_root(const char *path, const char *text) {
 
     g_string_append_printf(command, "/bin/echo \"%s\" >> \"%s\"", text, path);
     
-    bool ret = run_as_root(command->str);
-    g_string_free(command, TRUE);
+    char * ret = g_string_free(command, FALSE);
 
     return ret;
 }
 
-bool setup_node(const unsigned int rack_no, const unsigned int chassis_no, __attribute__((unused)) const char *mac_addr) {
+bool setup_node_network(const unsigned int rack_no, const unsigned int chassis_no, __attribute__((unused)) const char *mac_addr) {
     // add the node to /etc/hosts
     GString *hosts_str = g_string_new(NULL);
     assert(NULL != hosts_str);
     g_string_append_printf(hosts_str, "%s.%i.%i\tnode%i-%i", subnet, rack_no, chassis_no, rack_no, chassis_no);
 
-    bool hosts_ret = append_to_file_root("/etc/hosts", hosts_str->str);
+    char *hosts_ret = append_to_file("/etc/hosts", hosts_str->str);
     g_string_free(hosts_str, TRUE);
-    if (!hosts_ret) {
-        return false;
-    }
+    assert(NULL != hosts_ret);
 
     // add DHCP entry for the node
     GString *dhcp_str = g_string_new(NULL);
     assert(NULL != dhcp_str);
     g_string_append_printf(dhcp_str, "static_lease %s %s.%i.%i", mac_addr, subnet, rack_no, chassis_no);
 
-    bool dhcp_ret = append_to_file_root("/etc/udhcpd.conf", dhcp_str->str);
+    char *dhcp_ret = append_to_file("/etc/udhcpd.conf", dhcp_str->str);
     g_string_free(dhcp_str, TRUE);
-    if (!dhcp_ret) {
-        return false;
-    }
+    assert(NULL != dhcp_ret);
 
     // restart udhcpd
-    return run_as_root("/bin/systemctl restart udhcpd.service");
+    const char restart[] = "/bin/systemctl restart udhcpd.service";
+
+    // combine the commands
+    GString *combined = g_string_new(hosts_ret);
+    assert(NULL != combined);
+    g_string_append_printf(combined, " && %s && %s", dhcp_ret, restart);
+
+    bool ret = run_as_root(combined->str);
+
+    g_string_free(combined, TRUE);
+    g_free(hosts_ret);
+    g_free(dhcp_ret);
+
+    return ret;
 }
 
 // pretty dangerous function. Think carefully about the contents of file
-static void revert_file(const char *file, unsigned int rack_no, unsigned int chassis_no) {
+static char *revert_file(const char *file, unsigned int rack_no, unsigned int chassis_no) {
     GString *command = g_string_new(NULL);
     assert(NULL != command);
 
     g_string_append_printf(command, "bash -c \"cat %s | grep -v %s.%i.%i > %s_tmp && mv %s_tmp %s\"", 
         file, subnet, rack_no, chassis_no, file, file, file);
 
-    // don't assert result because the user might cancel 
-    run_as_root(command->str);
+    return g_string_free(command, FALSE);
 }
 
-void node_cleanup(const unsigned int rack_no, const unsigned int chassis_no) {
-    revert_file("/etc/hosts", rack_no, chassis_no);
-    revert_file("/etc/udhcpd.conf", rack_no, chassis_no);
-    run_as_root("/bin/systemctl restart udhcpd.service");
+void node_cleanup_network(const unsigned int rack_no, const unsigned int chassis_no) {
+    char *hosts_str = revert_file("/etc/hosts", rack_no, chassis_no);
+    assert(NULL != hosts_str);
+    char *dhcp_str = revert_file("/etc/udhcpd.conf", rack_no, chassis_no);
+    assert(NULL != dhcp_str);
+
+    GString *combined = g_string_new(hosts_str);
+    assert(NULL != combined);
+    g_string_append_printf(combined, " && %s && /bin/systemctl restart udhcpd.service", dhcp_str);
+
+    // ignore success code for usability: it does not matter that much if this cleanup succeeds
+    run_as_root(combined->str);
+
+    g_free(hosts_str);
+    g_free(dhcp_str);
+    g_string_free(combined, TRUE);
 }
-
-// functions
-

@@ -20,10 +20,10 @@ extern "C" {
 
 // attempt to set up a node specified by the arguments. These arguments are assumed to be valid.
 // returns success
-bool setup_node(const unsigned int rack_no, const unsigned int chassis_no, const char *mac_addr);
+bool setup_node_network(const unsigned int rack_no, const unsigned int chassis_no, const char *mac_addr);
 
 // attempt to revert the changes made in setup_node
-void node_cleanup(const unsigned int rack_no, const unsigned int chassis_no);
+void node_cleanup_network(const unsigned int rack_no, const unsigned int chassis_no);
 
 #ifdef _cplusplus
 }
