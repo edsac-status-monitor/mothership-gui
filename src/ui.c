@@ -303,11 +303,11 @@ static void ok_callback(__attribute__((unused)) GtkButton *unused, gpointer user
                 gtk_dialog_run(GTK_DIALOG(delay_dialog));
                 gtk_widget_destroy(delay_dialog);
 
-                // copy over config file
-                if (!copy_file(rack_no, chassis_no, config_path, "~/")) {
+                // ssh stage of node setup
+                if (!setup_node_ssh(rack_no, chassis_no, config_path)) {
                     // complain
                     GtkWidget *bad_copy_dialog = gtk_message_dialog_new(add_node_window, GTK_DIALOG_DESTROY_WITH_PARENT, GTK_MESSAGE_ERROR,
-                        GTK_BUTTONS_CLOSE, "Failed to copy configuration file to node!");
+                        GTK_BUTTONS_CLOSE, "Failed to setup node over ssh!");
                     gtk_dialog_run(GTK_DIALOG(bad_copy_dialog));
                     gtk_widget_destroy(bad_copy_dialog);
                 } 
@@ -400,7 +400,7 @@ static void add_node_activate(void) {
 
     GtkTextView *config_path_text = new_text_view(grid, 1, 3);
 
-    GtkWidget *config_path_button = gtk_button_new_with_label("Choose config file");
+    GtkWidget *config_path_button = gtk_button_new_with_label("Choose config archive");
     assert(NULL != config_path_button);
     gtk_grid_attach(grid, config_path_button, 0, 3, 1, 1);
     GtkTextBuffer *buffer = gtk_text_view_get_buffer(config_path_text);

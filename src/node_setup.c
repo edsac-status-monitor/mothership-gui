@@ -14,6 +14,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
+#include <libgen.h>
 
 static const char subnet[] = "172.16";
 static const char user[] = "pi"; // user used when logging in over ssh
@@ -141,4 +142,61 @@ bool copy_file(const unsigned int rack_no, const unsigned int chassis_no, const 
         return true;
     }
     return false;
+}
+
+bool run_remote_command(const unsigned int rack_no, const unsigned int chassis_no, const char *cmd) {
+    assert(NULL != cmd);
+
+    GString *command = g_string_new(NULL);
+    assert(NULL != command);
+
+    g_string_printf(command, "%s /usr/bin/ssh %s@%s.%i.%i '%s'", term, user, subnet, rack_no, chassis_no, cmd);
+
+    int res = system(command->str);
+    g_string_free(command, TRUE);
+
+    if (EXIT_SUCCESS == res) {
+        return true;
+    }
+    return false;
+}
+
+
+bool copy_and_extract_archive(const unsigned int rack_no, const unsigned int chassis_no, const char *archive, const char *dest) {
+    assert(NULL != archive);
+
+    GString *mkdir = g_string_new(NULL);
+    assert(NULL != mkdir);
+
+    g_string_printf(mkdir, "mkdir -p %s", dest);
+    run_remote_command(rack_no, chassis_no, mkdir->str);
+
+    g_string_free(mkdir, TRUE);
+    mkdir = NULL;
+
+    if (!copy_file(rack_no, chassis_no, archive, dest)) {
+        return false;
+    }
+
+    GString *archive_copy = g_string_new(archive);
+    assert(NULL != archive_copy);
+
+    const char *archive_name = basename(archive_copy->str);
+    assert(NULL != archive_name);
+
+    GString *command = g_string_new(NULL);
+    assert(NULL != command);
+
+    g_string_printf(command, "cd %s && tar -xf %s && rm %s", dest, archive_name, archive_name);
+
+    bool ret = run_remote_command(rack_no, chassis_no, command->str);
+
+    g_string_free(archive_copy, TRUE);
+    g_string_free(command, TRUE);
+
+    return ret;
+}
+
+bool setup_node_ssh(const unsigned int rack_no, const unsigned int chassis_no, const char *conf_archive) {
+    return copy_and_extract_archive(rack_no, chassis_no, conf_archive, "/home/pi/edsac");
 }
