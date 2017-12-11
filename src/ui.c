@@ -19,6 +19,8 @@
 #include <time.h>
 #include "node_setup.h"
 
+extern const char * g_prefix_path; // main.c
+
 // declarations
 static void activate(GtkApplication *app, gpointer data);
 static void shutdown_handler(__attribute__((unused)) GApplication *app, gpointer user_data);
@@ -146,9 +148,15 @@ static void choose_config_file_callback(__attribute__((unused)) GtkButton *unuse
     assert(NULL != user_data);
     GtkTextBuffer *buffer = GTK_TEXT_BUFFER(user_data);
 
-    GtkWidget *dialog = gtk_file_chooser_dialog_new("Choose Configuration File", main_window, 
+    GtkWidget *dialog = gtk_file_chooser_dialog_new("Choose Configuration Archive", main_window, 
         GTK_FILE_CHOOSER_ACTION_OPEN, "Cancel", GTK_RESPONSE_CANCEL,
         "Open", GTK_RESPONSE_ACCEPT, NULL);
+
+    // set directory to start from as the configs directory 
+    GString *configs_path = g_string_new(g_prefix_path);
+    assert(NULL != configs_path);
+    g_string_append(configs_path, "/configs");
+    gtk_file_chooser_set_current_folder(GTK_FILE_CHOOSER(dialog), configs_path->str);
 
     gint res = gtk_dialog_run(GTK_DIALOG(dialog));
     if (GTK_RESPONSE_ACCEPT == res) {

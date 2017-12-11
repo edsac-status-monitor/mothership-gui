@@ -15,6 +15,15 @@
 #include "sql.h"
 #include <assert.h>
 #include "ui.h"
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <errno.h>
+#include <string.h>
+
+
+#define DEFAULT_PREFIX_PATH "./edsac"
+char *g_prefix_path = NULL;
 
 // functions
 
@@ -52,20 +61,16 @@ static gboolean version_option_callback(__attribute__((unused)) gchar *option_na
     exit(EXIT_SUCCESS);
 }
 
-#define DEFAULT_DB_PATH "./mothership.db"
-
 int main(int argc, char** argv) {
     const time_t update_time = 2; // seconds
     timer_t timer_id = NULL;
 
     // option arguments new for this
-    char *db_path = NULL;
-    bool db_path_set = true;
     #pragma GCC diagnostic push
     #pragma GCC diagnostic ignored "-Wpedantic"
     GOptionEntry entries[] = {
         {"version", 'v', G_OPTION_FLAG_NO_ARG, G_OPTION_ARG_CALLBACK, version_option_callback, NULL, NULL},
-        {"db-path", 'd', G_OPTION_FLAG_NONE, G_OPTION_ARG_FILENAME, &db_path, "Path to the database file", "PATH"},
+        {"path", 'd', G_OPTION_FLAG_NONE, G_OPTION_ARG_FILENAME, &g_prefix_path, "Path to the prefix directory underwhich the database is stored and other files are expected", "PATH"},
         {NULL}
     };
     #pragma GCC diagnostic pop
@@ -73,16 +78,46 @@ int main(int argc, char** argv) {
     struct sockaddr *addr = get_args(&argc, &argv, gtk_get_option_group(TRUE), entries);
     assert(NULL != addr);
 
-    if (NULL == db_path) {
-        init_database(DEFAULT_DB_PATH);
-        db_path_set = false;
-    } else {
-        init_database(db_path);
+    if (NULL == g_prefix_path) {
+        g_prefix_path = (char *) DEFAULT_PREFIX_PATH;
+    } 
+    
+    struct stat statbuf;
+    if (0 != stat(g_prefix_path, &statbuf)) {
+        // does the prefix directory even exist?
+        if (ENOENT == errno) {
+            // create missing directories
+            printf("Creating prefix directory (%s) and subdirectories (%s/configs)\n", g_prefix_path, g_prefix_path);
+            if (0 != mkdir(g_prefix_path, S_IRWXU | S_IRGRP | S_IXGRP /*rwxr-x---*/)) {
+                perror("mkdir prefix");
+                return EXIT_FAILURE;
+            }
+
+            GString *configs = g_string_new(g_prefix_path);
+            assert(NULL != configs);
+            g_string_append_printf(configs, "/configs");
+            if (0 != mkdir(configs->str, S_IRWXU | S_IRGRP | S_IXGRP /*rwxr-x---*/)) {
+                perror("mkdir configs");
+                return EXIT_FAILURE;
+            }
+            g_string_free(configs, TRUE);
+
+        } else { // some other error from stat
+            perror("stat prefix dir");
+            return EXIT_FAILURE;
+        }
+    } else if (!S_ISDIR(statbuf.st_mode)) { // stat worked but is it a directory?
+        fprintf(stderr, "%s is not a directory\n", g_prefix_path);
+        return EXIT_FAILURE;
     }
 
-    if (db_path_set) {
-        g_free(db_path);
-    }
+    // initialise database at path/mothership.db
+    GString *db_path = g_string_new(g_prefix_path);
+    assert(NULL != db_path);
+    g_string_append_printf(db_path, "/mothership.db");
+    init_database(db_path->str);
+    g_string_free(db_path, TRUE);
+    db_path = NULL;
 
     assert(true == create_timer((timer_handler_t) periodic_update, &timer_id, update_time));
 
@@ -92,4 +127,5 @@ int main(int argc, char** argv) {
    }
 
     return start_ui(&argc, &argv, (gpointer) &timer_id);
+    // g_prefix_path points to a leaked dynamically allocated string if the argument was specified. 
 }
