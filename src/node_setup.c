@@ -61,6 +61,21 @@ static char *append_to_file(const char *path, const char *text) {
 }
 
 bool setup_node_network(const unsigned int rack_no, const unsigned int chassis_no, __attribute__((unused)) const char *mac_addr) {
+    // remove this IP address and hostname from .ssh/known_hosts
+    GString *known_hosts = g_string_new(NULL);
+    assert(NULL != known_hosts);
+    g_string_append_printf(known_hosts, "ssh-keygen -f ~/.ssh/known_hosts -R %s.%i.%i; ssh-keygen -f ~/.ssh/known_hosts -R node%i-%i;", subnet, rack_no, chassis_no, rack_no, chassis_no);
+
+    int known_hosts_ret = system(known_hosts->str);
+    g_string_free(known_hosts, TRUE);
+    known_hosts = NULL;
+
+    // this is just a precaution and won't be neccesary in most cases so ignore the error code so long as system() itself is not upset
+    if (-1 == known_hosts_ret) {
+        perror("system known_hosts");
+        return false;
+    }
+
     // add the node to /etc/hosts
     GString *hosts_str = g_string_new(NULL);
     assert(NULL != hosts_str);
