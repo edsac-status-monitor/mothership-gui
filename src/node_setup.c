@@ -16,9 +16,11 @@
 #include <assert.h>
 #include <libgen.h>
 
+extern const char * g_prefix_path; // main.c
+
 static const char subnet[] = "172.16";
 static const char user[] = "pi"; // user used when logging in over ssh
-static const char term[] = "/usr/bin/gnome-terminal --";
+static const char term[] = "/usr/bin/xfce4-terminal -x ";
 
 // command must not use single quotes
 // obviously use with care
@@ -213,5 +215,59 @@ bool copy_and_extract_archive(const unsigned int rack_no, const unsigned int cha
 }
 
 bool setup_node_ssh(const unsigned int rack_no, const unsigned int chassis_no, const char *conf_archive) {
-    return copy_and_extract_archive(rack_no, chassis_no, conf_archive, "/home/pi/edsac");
+    GString *dist_archive_path = g_string_new(g_prefix_path);
+    assert(NULL != dist_archive_path);
+
+    g_string_append_printf(dist_archive_path, "/dist-archive.tar.gz");
+
+    bool ret = copy_and_extract_archive(rack_no, chassis_no, dist_archive_path->str, "/home/pi/edsac");
+    g_string_free(dist_archive_path, TRUE);
+    dist_archive_path = NULL;
+    if (!ret) {
+        perror("Copying and extracting dist-archive.tar.gz");
+        return false;
+    }
+
+    ret = copy_and_extract_archive(rack_no, chassis_no, conf_archive, "/home/pi/edsac");
+    if (!ret) {
+        perror("Copying and extracting conf_archive");
+        return false;
+    }
+
+    // systemd user service to run the node software on boot
+    // TODO this only runs sending.test right now
+
+    /*
+    [Unit]
+    Description=EDSAC Status Monitor -- TODO this is only a test executable not the proper thing
+    Wants=network-online.target
+    After=network-online.target
+
+    [Service]
+    Environment="LD_LIBRARY_PATH=/home/pi/edsac/dist-archive/"
+    ExecStart=/home/pi/edsac/dist-archive/sending.test -a 172.16.0.1
+
+    [Install]
+    WantedBy=default.target
+    */
+
+    GString *command = g_string_new(NULL);
+    assert(NULL != command);
+
+    g_string_append_printf(command, "mkdir -p /home/%s/.config/systemd/user && \
+        echo -e \" \
+        [Unit]\nDescription=EDSAC Status Monitor -- TODO this is only a test executable not the proper thing\nWants=network-online.target\nAfter=network-online.target\n\n\
+        [Service]\nEnvironment=LD_LIBRARY_PATH=/home/%s/edsac/dist-archive/\nExecStart=/home/%s/edsac/dist-archive/sending.test -a 172.16.0.1\n\n\
+        [Install]\nWantedBy=default.target\
+        \" | tee /home/%s/.config/systemd/user/edsac-status-monitor.service", user, user, user, user);
+
+    g_string_append_printf(command, " && systemctl --user daemon-reload");
+    g_string_append_printf(command, " && systemctl --user enable edsac-status-monitor.service");
+    g_string_append_printf(command, " && systemctl --user start edsac-status-monitor.service");
+    g_string_append_printf(command, " && sudo loginctl enable-linger %s", user);
+
+    ret = run_remote_command(rack_no, chassis_no, command->str);
+    g_string_free(command, TRUE);
+
+    return ret;
 }
